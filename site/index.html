@@ -89,6 +89,9 @@ body{background:transparent;height:100%;overscroll-behavior:none}
 @media (max-width:700px){
   :root{--fs:clamp(34px,16vw,110px)}
   .top{top:max(44px, calc(env(safe-area-inset-top, 0px) + 12px));padding:0 8px}   /* sub Dynamic Island */
+  /* steagul ramane la mijloc; textul din stanga sta la marginea din stanga, iar spatiul liber ramane langa steag */
+  .left{justify-content:flex-start}
+  .left .bar{margin-left:auto}
   .timer{gap:clamp(6px,2.2vw,34px)}
   .lab{font-size:9px;letter-spacing:.14em}
   .sub{font-size:13px}
@@ -956,8 +959,7 @@ function fitTop() {   // linia de sus rămâne pe un singur rând: se micșoreaz
   topEl.style.setProperty('--k', 1);
   topEl.style.removeProperty('--sideW');
   const m = Math.max(left.scrollWidth, right.scrollWidth);
-  // pe calculator steagul sta fix la mijloc; pe telefon tot randul e centrat (altfel pare mutat la dreapta)
-  if (stage.getBoundingClientRect().width > 700) topEl.style.setProperty('--sideW', m + 'px');
+  topEl.style.setProperty('--sideW', m + 'px');   // laturi egale: steagul UE sta fix la mijloc
   const avail = stage.getBoundingClientRect().width - 12;
   topEl.style.setProperty('--k', Math.min(1, avail / topEl.offsetWidth));
 }
