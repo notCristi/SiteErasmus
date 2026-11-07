@@ -52,7 +52,7 @@ body{background:transparent;height:100%;overscroll-behavior:none}
 .brand{font:700 20px Inter,sans-serif;color:var(--crem);letter-spacing:.01em}
 .sch{font:500 15px Inter,sans-serif;color:var(--text);white-space:nowrap}
 .bar{width:1px;height:22px;background:rgba(217,222,236,.35)}
-.dot{width:4px;height:4px;border-radius:50%;background:var(--galben);flex:none}
+.dot{width:5px;height:5px;border-radius:50%;background:transparent;border:1px solid var(--galben);flex:none}   /* bila goala, doar contur */
 #flagslot{width:44px;height:44px}
 
 /* countdown */
@@ -98,11 +98,11 @@ body{background:transparent;height:100%;overscroll-behavior:none}
   .sch{font-size:var(--schFs,13px)}
   .sch[data-scoala="0"]{grid-row:3;grid-column:1}
   .left .bar{grid-row:3;grid-column:2}
-  .sch[data-scoala="1"]{grid-row:3;grid-column:3}
+  .sch[data-scoala="2"]{grid-row:3;grid-column:3}   /* Honterus la mijloc */
   .right .dot{grid-row:3;grid-column:4}
-  .sch[data-scoala="2"]{grid-row:3;grid-column:5}
+  .sch[data-scoala="1"]{grid-row:3;grid-column:5}
   .right .bar{display:none}
-  .left .bar{width:4px;height:4px;border-radius:50%;background:var(--galben)}
+  .left .bar{width:5px;height:5px;border-radius:50%;background:transparent;border:1px solid var(--galben)}
   .timer{gap:clamp(6px,2.2vw,34px)}
   .lab{font-size:9px;letter-spacing:.14em}
   .sub{font-size:13px}
