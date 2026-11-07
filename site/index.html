@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0B1638">
+<meta name="theme-color" content="#FCF9F2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19,14 +19,18 @@
   --fs:clamp(64px, min(13.8vw, 22vh), 200px);
 }
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--noapte);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-html{background:#0B1638}
-body{height:calc(100lvh + 300px)}
+html,body{margin:0;font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+/* Safari 26 vopseste zona de sub ceas cu culoarea lui html (o schimbam din JS: crem la intro, noapte la countdown) */
+html{background:var(--crem);height:100%;overscroll-behavior:none}
+body{background:transparent;height:100%;overscroll-behavior:none}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-#scena{position:fixed;inset:0}
-.stage{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;overflow:hidden}
+/* fara position:fixed: Safari nu mai ia culoarea barelor de la scena si o deseneaza si sub bara de jos.
+   scena = ecranul mare (100lvh, si sub bara Safari); stage = zona vizibila (100svh), stabila */
+#scena{position:absolute;top:0;left:0;width:100%;height:100vh;height:100lvh;overflow:hidden;touch-action:none}
+.stage{position:absolute;top:0;left:0;width:100%;height:100%;height:100svh}
 .full{position:absolute;inset:0}
+.bleed{bottom:calc(100svh - 100lvh)}
 
 /* ---------- scena de noapte ---------- */
 .night{background:linear-gradient(135deg,#142458 0%,#0B1638 50%,#070E26 100%);isolation:isolate}
@@ -94,7 +98,7 @@ body{height:calc(100lvh + 300px)}
 <section id="scena">
   <div class="stage">
 
-    <div class="full night" aria-hidden="true">
+    <div class="full bleed night" aria-hidden="true">
       <video id="bgv0" class="bgv off" muted playsinline preload="metadata"></video>
       <video id="bgv1" class="bgv off" muted playsinline preload="none"></video>
       <div class="full shade"></div>
@@ -127,7 +131,7 @@ body{height:calc(100lvh + 300px)}
       <p class="sub" id="sub"></p>
     </main>
 
-    <div class="full cream" id="cream" aria-hidden="true"></div>
+    <div class="full bleed cream" id="cream" aria-hidden="true"></div>
 
     <div class="logo" id="logo" aria-label="Animated Erasmus+ logo" role="img">
       <canvas id="c" width="1536" height="1024"></canvas>
@@ -721,6 +725,17 @@ function videoPlay(on) {   // pornește doar când se vede scena, ca să nu cons
 
 /* ---------- elementele scenei ---------- */
 const scena = $('scena'), stage = document.querySelector('.stage');
+// culoarea barelor din Safari: html pentru iOS 26, theme-color pentru iOS mai vechi
+const themeMeta = document.querySelector('meta[name="theme-color"]');
+let culoareBara = '';
+function barColor(c) {
+  if (c === culoareBara) return;
+  culoareBara = c;
+  document.documentElement.style.backgroundColor = c;
+  if (themeMeta) themeMeta.content = c;
+}
+barColor('#FCF9F2');
+scrollTo(0, 0);
 const logoEl = $('logo'), fx = $('fx'), fctx = fx.getContext('2d');
 const cream = $('cream'), cd = $('cd'), left = $('left'), right = $('right');
 const slot = $('flagslot'), hint = $('hint');
@@ -895,6 +910,7 @@ let atingY = null;
 addEventListener('touchstart', e => { atingY = e.touches[0].clientY; }, { passive: true });
 addEventListener('touchmove', e => {
   if (atingY === null) return;
+  e.preventDefault();   // pagina nu se deruleaza: bara Safari nu se mai strange/largeste si nimic nu tremura
   const dy = e.touches[0].clientY - atingY;
   if (Math.abs(dy) > 24) { mergi(dy < 0 ? 1 : -1); atingY = null; }
 }, { passive: false });
@@ -952,6 +968,7 @@ function render() {
 
   logoEl.style.visibility = p > 0 ? 'hidden' : 'visible';
   const nightK = smooth(clamp((pB - 0.35) / 0.65));
+  barColor(nightK > 0.5 ? '#0B1638' : '#FCF9F2');
   videoPlay(pB > 0);
   hint.style.opacity = introGata ? 1 - clamp(p / 0.04) : 0;
   hint.style.visibility = introGata && p < 0.04 ? 'visible' : 'hidden';
@@ -1016,7 +1033,8 @@ function render() {
   if (nightK <= 0) { cream.style.display = ''; cream.style.webkitMaskImage = cream.style.maskImage = ''; }
   else if (nightK >= 1) cream.style.display = 'none';
   else {
-    const far = Math.max(Math.hypot(C0x, C0y), Math.hypot(sr.width - C0x, C0y), Math.hypot(C0x, sr.height - C0y), Math.hypot(sr.width - C0x, sr.height - C0y));
+    const sh = Math.max(sr.height, scena.getBoundingClientRect().height);   // cremul se intinde si sub bara de jos
+    const far = Math.max(Math.hypot(C0x, C0y), Math.hypot(sr.width - C0x, C0y), Math.hypot(C0x, sh - C0y), Math.hypot(sr.width - C0x, sh - C0y));
     const rr = R0 * DISC + nightK * (far + 80);
     const mk = `radial-gradient(circle at ${C0x}px ${C0y}px, transparent ${rr}px, #000 ${rr + 70}px)`;
     cream.style.display = ''; cream.style.webkitMaskImage = mk; cream.style.maskImage = mk;
