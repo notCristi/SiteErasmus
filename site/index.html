@@ -17,20 +17,24 @@
   --crem:#FCF9F2; --noapte:#0B1638; --albastru:#003399; --galben:#FFCC00;
   --text:#C3CBE0; --text-2:#D9DEEC; --cerneala:#10204A;
   --fs:clamp(64px, min(13.8vw, 22vh), 200px);
+  --bt:120px; --bb:220px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 /* Safari 26 vopseste zona de sub ceas cu culoarea lui html (o schimbam din JS: crem la intro, noapte la countdown) */
-html{background:var(--crem);height:100%;overscroll-behavior:none}
+html{background:var(--crem);height:100%;overscroll-behavior:none;scrollbar-width:none}
+html::-webkit-scrollbar{display:none}
 body{background:transparent;height:100%;overscroll-behavior:none}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-/* fara position:fixed: Safari nu mai ia culoarea barelor de la scena si o deseneaza si sub bara de jos.
-   scena = ecranul mare (100lvh, si sub bara Safari); stage = zona vizibila (100svh), stabila */
-#scena{position:absolute;top:0;left:0;width:100%;height:100vh;height:100lvh;overflow:hidden;touch-action:none}
-.stage{position:absolute;top:0;left:0;width:100%;height:100%;height:100svh}
+/* fara position:fixed: Safari nu mai ia culoarea barelor de la scena.
+   Pagina e mai inalta decat ecranul (--bt deasupra, --bb dedesubt) si e derulata fix cu --bt:
+   asa Safari deseneaza fundalul si sub ceas/Dynamic Island si sub bara de jos.
+   stage = zona vizibila (100svh), stabila; .bleed = fundalul care iese sus si jos */
+#scena{position:absolute;top:0;left:0;width:100%;height:calc(var(--bt) + 100vh + var(--bb));height:calc(var(--bt) + 100svh + var(--bb));overflow:hidden;touch-action:none}
+.stage{position:absolute;top:var(--bt);left:0;width:100%;height:100vh;height:100svh}
 .full{position:absolute;inset:0}
-.bleed{bottom:calc(100svh - 100lvh)}
+.bleed{top:calc(-1 * var(--bt));bottom:calc(-1 * var(--bb))}
 
 /* ---------- scena de noapte ---------- */
 .night{background:linear-gradient(135deg,#142458 0%,#0B1638 50%,#070E26 100%);isolation:isolate}
@@ -84,7 +88,7 @@ body{background:transparent;height:100%;overscroll-behavior:none}
 /* ---------- telefon ---------- */
 @media (max-width:700px){
   :root{--fs:clamp(34px,16vw,110px)}
-  .top{top:16px;padding:0 8px}
+  .top{top:max(44px, calc(env(safe-area-inset-top, 0px) + 12px));padding:0 8px}   /* sub Dynamic Island */
   .timer{gap:clamp(6px,2.2vw,34px)}
   .lab{font-size:9px;letter-spacing:.14em}
   .sub{font-size:13px}
@@ -735,7 +739,12 @@ function barColor(c) {
   if (themeMeta) themeMeta.content = c;
 }
 barColor('#FCF9F2');
-scrollTo(0, 0);
+// pagina sta derulata exact cu --bt (nu se poate derula de mana: touch-action:none + preventDefault)
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+const BT = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bt')) || 0;
+function pista() { const t = BT(); if (Math.abs(scrollY - t) > 0.5) scrollTo(0, t); }
+pista();
+['scroll', 'resize', 'pageshow', 'orientationchange'].forEach(ev => addEventListener(ev, pista, { passive: true }));
 const logoEl = $('logo'), fx = $('fx'), fctx = fx.getContext('2d');
 const cream = $('cream'), cd = $('cd'), left = $('left'), right = $('right');
 const slot = $('flagslot'), hint = $('hint');
@@ -947,7 +956,8 @@ function fitTop() {   // linia de sus rămâne pe un singur rând: se micșoreaz
   topEl.style.setProperty('--k', 1);
   topEl.style.removeProperty('--sideW');
   const m = Math.max(left.scrollWidth, right.scrollWidth);
-  topEl.style.setProperty('--sideW', m + 'px');
+  // pe calculator steagul sta fix la mijloc; pe telefon tot randul e centrat (altfel pare mutat la dreapta)
+  if (stage.getBoundingClientRect().width > 700) topEl.style.setProperty('--sideW', m + 'px');
   const avail = stage.getBoundingClientRect().width - 12;
   topEl.style.setProperty('--k', Math.min(1, avail / topEl.offsetWidth));
 }
@@ -1033,10 +1043,11 @@ function render() {
   if (nightK <= 0) { cream.style.display = ''; cream.style.webkitMaskImage = cream.style.maskImage = ''; }
   else if (nightK >= 1) cream.style.display = 'none';
   else {
-    const sh = Math.max(sr.height, scena.getBoundingClientRect().height);   // cremul se intinde si sub bara de jos
-    const far = Math.max(Math.hypot(C0x, C0y), Math.hypot(sr.width - C0x, C0y), Math.hypot(C0x, sh - C0y), Math.hypot(sr.width - C0x, sh - C0y));
+    // cremul iese cu --bt deasupra si --bb sub zona vizibila: masca e in coordonatele lui
+    const cr = scena.getBoundingClientRect(), by = sr.top - cr.top, cy = C0y + by, sh = cr.height;
+    const far = Math.max(Math.hypot(C0x, cy), Math.hypot(sr.width - C0x, cy), Math.hypot(C0x, sh - cy), Math.hypot(sr.width - C0x, sh - cy));
     const rr = R0 * DISC + nightK * (far + 80);
-    const mk = `radial-gradient(circle at ${C0x}px ${C0y}px, transparent ${rr}px, #000 ${rr + 70}px)`;
+    const mk = `radial-gradient(circle at ${C0x}px ${cy}px, transparent ${rr}px, #000 ${rr + 70}px)`;
     cream.style.display = ''; cream.style.webkitMaskImage = mk; cream.style.maskImage = mk;
   }
   toScreen();
