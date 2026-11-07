@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Erasmus+ · Honterus</title>
 <meta name="description" content="Countdown to the Erasmus+ mobility.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0B1638">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -600,19 +603,14 @@ const DATA = {"assets":{"A":"data:image/webp;base64,UklGRpQTAQBXRUJQVlA4IIgTAQCw
 
   // browserele nu lasa sunetul sa porneasca singur: daca e blocat, asteptam un click
   function waitForClick() {
-    if (startBtn) startBtn.hidden = true;
-    // pornim animatia imediat (fara sunet) si adaugam sunetul la prima atingere
-    startClock();
-    if (!snd) return;
-    const evs = ['pointerdown', 'touchend', 'click', 'keydown', 'wheel'];
+    if (!startBtn) { startClock(); return; }
+    startBtn.hidden = false;
     const go = () => {
-      evs.forEach(ev => window.removeEventListener(ev, go, true));
-      if (clock.t >= TL.end || clock.t >= snd.duration - 0.02) return;
-      try { snd.currentTime = clock.t; } catch (e) {}
-      snd.playbackRate = clock.speed;
-      snd.play().catch(() => {});
+      startBtn.hidden = true;
+      ['pointerdown', 'keydown'].forEach(ev => window.removeEventListener(ev, go));
+      play(true, startClock);
     };
-    evs.forEach(ev => window.addEventListener(ev, go, true));
+    ['pointerdown', 'keydown'].forEach(ev => window.addEventListener(ev, go));
   }
 
   const keys = ['A', 'B', 'atlas', 'flags', 'tag', 'map', 'textmask', 'final'];
