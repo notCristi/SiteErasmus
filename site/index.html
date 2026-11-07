@@ -20,8 +20,8 @@ html,body{margin:0;background:var(--noapte);font-family:Inter,system-ui,sans-ser
 html,body{overflow:hidden;height:100%;overscroll-behavior:none}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-#scena{position:relative;height:100vh;height:100svh}
-.stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden}
+#scena{position:fixed;inset:0}
+.stage{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;overflow:hidden}
 .full{position:absolute;inset:0}
 
 /* ---------- scena de noapte ---------- */
@@ -600,14 +600,19 @@ const DATA = {"assets":{"A":"data:image/webp;base64,UklGRpQTAQBXRUJQVlA4IIgTAQCw
 
   // browserele nu lasa sunetul sa porneasca singur: daca e blocat, asteptam un click
   function waitForClick() {
-    if (!startBtn) { startClock(); return; }
-    startBtn.hidden = false;
+    if (startBtn) startBtn.hidden = true;
+    // pornim animatia imediat (fara sunet) si adaugam sunetul la prima atingere
+    startClock();
+    if (!snd) return;
+    const evs = ['pointerdown', 'touchend', 'click', 'keydown', 'wheel'];
     const go = () => {
-      startBtn.hidden = true;
-      ['pointerdown', 'keydown'].forEach(ev => window.removeEventListener(ev, go));
-      play(true, startClock);
+      evs.forEach(ev => window.removeEventListener(ev, go, true));
+      if (clock.t >= TL.end || clock.t >= snd.duration - 0.02) return;
+      try { snd.currentTime = clock.t; } catch (e) {}
+      snd.playbackRate = clock.speed;
+      snd.play().catch(() => {});
     };
-    ['pointerdown', 'keydown'].forEach(ev => window.addEventListener(ev, go));
+    evs.forEach(ev => window.addEventListener(ev, go, true));
   }
 
   const keys = ['A', 'B', 'atlas', 'flags', 'tag', 'map', 'textmask', 'final'];
