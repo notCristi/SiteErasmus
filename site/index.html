@@ -89,9 +89,20 @@ body{background:transparent;height:100%;overscroll-behavior:none}
 @media (max-width:700px){
   :root{--fs:clamp(34px,16vw,110px)}
   .top{top:max(44px, calc(env(safe-area-inset-top, 0px) + 12px));padding:0 8px}   /* sub Dynamic Island */
-  /* steagul ramane la mijloc; textul din stanga sta la marginea din stanga, iar spatiul liber ramane langa steag */
-  .left{justify-content:flex-start}
-  .left .bar{margin-left:auto}
+  /* pe telefon: steagul UE sus, "Erasmus+" sub el, cele 3 scoli pe un rand dedesubt */
+  .top{grid-template-columns:repeat(5,auto);justify-items:center;column-gap:8px;row-gap:6px}
+  .side{display:contents}
+  .side>*{opacity:var(--in,0)}
+  #flagslot{grid-row:1;grid-column:1/-1}
+  .brand{grid-row:2;grid-column:1/-1;font-size:18px}
+  .sch{font-size:var(--schFs,13px)}
+  .sch[data-scoala="0"]{grid-row:3;grid-column:1}
+  .left .bar{grid-row:3;grid-column:2}
+  .sch[data-scoala="1"]{grid-row:3;grid-column:3}
+  .right .dot{grid-row:3;grid-column:4}
+  .sch[data-scoala="2"]{grid-row:3;grid-column:5}
+  .right .bar{display:none}
+  .left .bar{width:4px;height:4px;border-radius:50%;background:var(--galben)}
   .timer{gap:clamp(6px,2.2vw,34px)}
   .lab{font-size:9px;letter-spacing:.14em}
   .sub{font-size:13px}
@@ -955,8 +966,19 @@ function star(ctx, x, y, R) {
 
 let dpr = 1;
 const topEl = $('top');
+const pePhone = matchMedia('(max-width:700px)');
 function fitTop() {   // linia de sus rămâne pe un singur rând: se micșorează cât e nevoie
   topEl.style.setProperty('--k', 1);
+  if (pePhone.matches) {   // pe telefon doar rândul cu școlile se micșorează (steagul și "Erasmus+" rămân mari)
+    const avail = stage.getBoundingClientRect().width - 16;
+    let fs = 13;
+    for (let i = 0; i < 3; i++) {
+      topEl.style.setProperty('--schFs', fs + 'px');
+      fs = Math.min(13, fs * avail / topEl.offsetWidth);
+    }
+    topEl.style.setProperty('--schFs', fs.toFixed(2) + 'px');
+    return;
+  }
   topEl.style.removeProperty('--sideW');
   const m = Math.max(left.scrollWidth, right.scrollWidth);
   topEl.style.setProperty('--sideW', m + 'px');   // laturi egale: steagul UE sta fix la mijloc
@@ -986,6 +1008,7 @@ function render() {
   hint.style.visibility = introGata && p < 0.04 ? 'visible' : 'hidden';
 
   const k = smooth(clamp((pC - 0.55) / 0.45));
+  topEl.style.setProperty('--in', k);   // pe telefon textul apare prin --in
   left.style.opacity = k; left.style.transform = `translateX(${(1 - k) * 24}px)`;
   right.style.opacity = k; right.style.transform = `translateX(${(k - 1) * 24}px)`;
   const c = smooth(clamp((pC - 0.30) / 0.55));
