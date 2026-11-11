@@ -689,8 +689,8 @@ const dataText = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'shor
 $('sub').textContent = `${CONFIG.destinatia} · ${dataText}`;
 
 /* ---------- video de fundal (dacă lipsește, rămâne fundalul albastru) ---------- */
-/* video-ul e împărțit în 8 bucăți sub 100 MB; două playere se schimbă pe rând, fără pauză */
-const PARTI = Array.from({ length: 8 }, (_, i) => `media/fundal-${i + 1}.mp4`);
+/* video-ul e împărțit în 24 bucăți sub 25 MB (limita Cloudflare Pages); două playere se schimbă pe rând, fără pauză */
+const PARTI = Array.from({ length: 24 }, (_, i) => `media/fundal-${i + 1}.mp4`);
 const vids = [$('bgv0'), $('bgv1')];
 // pornește de fiecare dată din alt loc: o bucată la întâmplare, la un moment la întâmplare
 let activ = 0, parte = Math.floor(Math.random() * PARTI.length), videoOK = true, videoOn = false, schimba = false, pregatit = false;
