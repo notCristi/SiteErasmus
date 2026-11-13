@@ -222,7 +222,7 @@ html.scrolled .section-nav::before{opacity:1}
 @media (max-width:860px),(max-aspect-ratio:4/5){
   .section-nav{padding-bottom:4px}
   .section-nav nav{--section-gap:6px;display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,36px);gap:0 var(--section-gap)}
-  .section-home{grid-column:1;grid-row:1 / 3}
+  .section-home{grid-column:1;grid-row:1 / 3;align-self:start;width:36px;height:36px}   /* sub el sta butonul de sunet (.music) */
   .section-link{min-height:36px}
   .section-link span{font-size:clamp(16px,4.2vw,24px)}
   .section-link[aria-current="page"] span{letter-spacing:clamp(.1em,.68vw,.46em)}
@@ -406,18 +406,26 @@ a.glass.btn:active,button.glass.btn:active{scale:.95}
 .music.dark{color:#fff;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22)}
 .music.dark:hover{background:rgba(255,255,255,.2)}
 .music.dark:focus-visible{outline-color:var(--galben)}
-/* trei bare: se misca atunci cand chiar se aude un sunet (muzica continua sau un SFX scurt) */
-.music i{width:3px;height:14px;border-radius:2px;background:currentColor;transform-origin:50% 100%;transform:scaleY(.3);transition:transform .25s ease}
-.music.on i{animation:music-bar 1s ease-in-out infinite}
-.music.on i:nth-child(2){animation-delay:-.35s}
-.music.on i:nth-child(3){animation-delay:-.7s}
-.music.pulse i{animation:music-pulse .34s ease-out}
-.music.pulse i:nth-child(2){animation-delay:.04s}
-.music.pulse i:nth-child(3){animation-delay:.08s}
-@keyframes music-bar{0%,100%{transform:scaleY(.3)}50%{transform:scaleY(1)}}
-@keyframes music-pulse{0%{transform:scaleY(.3)}35%{transform:scaleY(1)}100%{transform:scaleY(.3)}}
-/* oprit: barele sunt taiate cu o linie */
+/* difuzor cu 3 unde: undele se aprind pe rand atunci cand chiar se aude un sunet (muzica continua sau un SFX scurt) */
+.music svg{width:22px;height:22px;overflow:visible}
+.music .w{opacity:.22;transition:opacity .25s ease}
+.music .x{opacity:0;transition:opacity .2s ease}
+.music.on .w{animation:music-wave 1.1s ease-in-out infinite}
+.music.on .w2{animation-delay:.18s}
+.music.on .w3{animation-delay:.36s}
+.music.pulse .w{animation:music-pulse .42s ease-out}
+.music.pulse .w2{animation-delay:.06s}
+.music.pulse .w3{animation-delay:.12s}
+@keyframes music-wave{0%,100%{opacity:.22}40%{opacity:1}}
+@keyframes music-pulse{0%{opacity:.22}40%{opacity:1}100%{opacity:.22}}
+/* oprit: undele dispar, in locul lor apare un X */
 .music[aria-pressed="false"]{color:rgba(16,32,74,.55)}
 .music.dark[aria-pressed="false"]{color:rgba(255,255,255,.55)}
-.music[aria-pressed="false"]::after{content:'';position:absolute;width:24px;height:2px;border-radius:2px;background:currentColor;rotate:-45deg}
-@media (prefers-reduced-motion:reduce){.music.on i,.music.pulse i{animation:none}.music.on i{transform:scaleY(.75)}}
+.music[aria-pressed="false"] .w{opacity:0;animation:none}
+.music[aria-pressed="false"] .x{opacity:1}
+@media (prefers-reduced-motion:reduce){.music.on .w,.music.pulse .w{animation:none}.music.on .w{opacity:1}}
+/* telefon, paginile din interior: steagul UE mai mic si mai sus, iar butonul de sunet chiar sub el, in stanga sus */
+@media (max-width:860px),(max-aspect-ratio:4/5){
+  body:not([data-page="home"]) .music{top:calc(var(--nav-top) + 40px);bottom:auto;left:calc(var(--pad) + 2px);width:32px;height:32px}
+  body:not([data-page="home"]) .music svg{width:20px;height:20px}
+}

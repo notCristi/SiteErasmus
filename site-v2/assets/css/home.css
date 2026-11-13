@@ -256,5 +256,5 @@ body[data-page="home"] .nav .flag.with-rim::after,.cols-flag.on::after{opacity:1
 /* butonul de muzica: pe telefon e mai mic si mai jos, ca sa nu stea peste numarul ultimei benzi */
 @media (max-width:860px),(max-aspect-ratio:4/5){
   body[data-page="home"] .music{width:34px;height:34px;left:max(8px, env(safe-area-inset-left, 0px));bottom:max(6px, env(safe-area-inset-bottom, 0px))}
-  body[data-page="home"] .music i{height:11px}
+  body[data-page="home"] .music svg{width:18px;height:18px}
 }

@@ -20,7 +20,14 @@ try { off = localStorage.getItem(KEY_OFF) === '1'; } catch (e) {}
 let btn = document.getElementById('music');
 if (!btn) {
   document.body.insertAdjacentHTML('beforeend',
-    '<button class="music" id="music" type="button" aria-label="Sound" title="Sound on / off"><i></i><i></i><i></i></button>');
+    '<button class="music" id="music" type="button" aria-label="Sound" title="Sound on / off">' +
+    // difuzorul, cele 3 unde de sunet (se aprind cand se aude ceva) si X-ul (cand sunetul e oprit)
+    '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path class="spk" d="M3.5 9.2h3.2L11 5.6v12.8l-4.3-3.6H3.5z" fill="currentColor"/>' +
+    '<path class="w w1" d="M14.2 10.1a2.6 2.6 0 0 1 0 3.8"/>' +
+    '<path class="w w2" d="M16.6 7.9a5.6 5.6 0 0 1 0 8.2"/>' +
+    '<path class="w w3" d="M19 5.6a8.8 8.8 0 0 1 0 12.8"/>' +
+    '<path class="x" d="M15 9.5l5 5M20 9.5l-5 5"/></svg></button>');
   btn = document.getElementById('music');
 }
 const active = new Set(), listeners = new Set();
