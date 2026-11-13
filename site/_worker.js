@@ -30,7 +30,7 @@ const FILES = {
 const MOBS = ['ro', 'fr', 'dk'];
 const STAFF_TYPES = ['info', 'day', 'stop'];        // doar profesorii si adminul: inlocuiesc un text care exista deja
 const TYPES = ['media', 'story', 'material', 'result', 'link', ...STAFF_TYPES];
-const TRIES = 8, GLOBAL_TRIES = 30, TRY_WINDOW = 15 * 60 * 1000;   // 8 incercari pe IP / 30 global in 15 minute
+const TRIES = 8, TRY_WINDOW = 15 * 60 * 1000;   // 8 incercari gresite de pe aceeasi adresa = pauza 15 minute
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS keys (id TEXT PRIMARY KEY, label TEXT NOT NULL, role TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, locked INTEGER NOT NULL DEFAULT 0, max_devices INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL DEFAULT 0, quota_mb INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)`,
@@ -39,17 +39,17 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, type TEXT NOT NULL, mob TEXT NOT NULL, skey TEXT, data TEXT NOT NULL, device_id TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
   `CREATE INDEX IF NOT EXISTS items_live ON items (deleted, created)`,
   `CREATE INDEX IF NOT EXISTS items_device ON items (device_id, deleted)`,
-  `CREATE TABLE IF NOT EXISTS files (key TEXT PRIMARY KEY, device_id TEXT NOT NULL, size INTEGER NOT NULL, cls TEXT NOT NULL, name TEXT, upload_id TEXT, created INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS files (key TEXT PRIMARY KEY, device_id TEXT NOT NULL, size INTEGER NOT NULL, cls TEXT NOT NULL, name TEXT, upload_id TEXT, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS files_device ON files (device_id, created)`,
   `CREATE TABLE IF NOT EXISTS attempts (ip TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS attempts_ip ON attempts (ip, ts)`,
-  `CREATE INDEX IF NOT EXISTS attempts_ts ON attempts (ts)`,
 ];
 const MIGRATIONS = [
   `ALTER TABLE keys ADD COLUMN locked INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE keys ADD COLUMN max_devices INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE keys ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE keys ADD COLUMN quota_mb INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE files ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`,
 ];
 let schemaReady = null, lastCleanup = 0;
 function ready(env) {
@@ -125,11 +125,8 @@ const me = dev => ({ id: dev.id, role: dev.role, name: dev.name, label: dev.role
 
 async function login(request, env, ctx) {
   const ip = request.headers.get('cf-connecting-ip') || 'local', now = Date.now();
-  const [ipFails, globalFails] = await Promise.all([
-    env.DB.prepare('SELECT COUNT(*) AS n FROM attempts WHERE ip = ? AND ts > ?').bind(ip, now - TRY_WINDOW).first('n'),
-    env.DB.prepare('SELECT COUNT(*) AS n FROM attempts WHERE ts > ?').bind(now - TRY_WINDOW).first('n'),
-  ]);
-  if (ipFails >= TRIES || globalFails >= GLOBAL_TRIES) throw new Bad('too_many_tries', 429);
+  const fails = await env.DB.prepare('SELECT COUNT(*) AS n FROM attempts WHERE ip = ? AND ts > ?').bind(ip, now - TRY_WINDOW).first('n');
+  if (fails >= TRIES) throw new Bad('too_many_tries', 429);
   const b = await body(request, 2000);
   const key = typeof b.key === 'string' ? b.key.trim().slice(0, 200) : '';
   const name = str(b.name, 60);
@@ -328,15 +325,27 @@ async function dropFiles(env, keys) {
   await env.MEDIA.delete(keys);
   await env.DB.batch(keys.map(k => env.DB.prepare('DELETE FROM files WHERE key = ?').bind(k)));
 }
-// pozele si fisierele se dau direct din R2; se pastreaza in browser un an (numele lor nu se repeta niciodata)
+async function setFilesHidden(env, datas, hidden) {
+  const keys = [...new Set(datas.flatMap(d => {
+    try { return itemKeys(typeof d === 'string' ? JSON.parse(d) : d); } catch (e) { return []; }
+  }))];
+  if (!keys.length) return;
+  await env.DB.batch(keys.map(k => env.DB.prepare('UPDATE files SET hidden = ? WHERE key = ?').bind(hidden ? 1 : 0, k)));
+}
+// pozele si fisierele se dau direct din R2; cache-control: public, no-cache revalideaza prin ETag (daca ajunge in Trash, devine imediat 404)
 async function media(request, env, key) {
   if (!fileKey(key)) return new Response('Not found', { status: 404 });
+  if (env.DB) {
+    await ready(env);
+    const fRow = await env.DB.prepare('SELECT hidden FROM files WHERE key = ?').bind(key).first();
+    if (fRow && fRow.hidden) return new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
+  }
   const obj = await env.MEDIA.get(key, { range: request.headers, onlyIf: request.headers });
   if (!obj) return new Response('Not found', { status: 404 });
   const h = new Headers();
   obj.writeHttpMetadata(h);
   h.set('etag', obj.httpEtag);
-  h.set('cache-control', 'public, max-age=31536000, immutable');
+  h.set('cache-control', 'public, no-cache');
   h.set('accept-ranges', 'bytes');
   h.set('x-content-type-options', 'nosniff');
   h.set('content-security-policy', "default-src 'none'; sandbox");
@@ -426,8 +435,12 @@ async function createItem(request, env, ctx, dev) {
     if (results.length !== new Set(keys).size || results.some(r => r.device_id !== dev.id)) throw new Bad('unknown_file');
   }
   const now = Date.now(), id = rand(8);
-  if (skey) {   // un singur text / fisier de felul asta pe mobilitate: cel vechi trece in Trash
-    await env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE deleted = 0 AND type = ? AND mob = ? AND skey = ?').bind(now, type, mob, skey).run();
+  if (skey) {   // un singur text / fisier de felul asta pe mobilitate: cel vechi trece in Trash si fisierele lui se ascund
+    const { results: oldRows } = await env.DB.prepare('SELECT data FROM items WHERE deleted = 0 AND type = ? AND mob = ? AND skey = ?').bind(type, mob, skey).all();
+    if (oldRows.length) {
+      await env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE deleted = 0 AND type = ? AND mob = ? AND skey = ?').bind(now, type, mob, skey).run();
+      await setFilesHidden(env, oldRows.map(r => r.data), true);
+    }
   }
   await env.DB.prepare('INSERT INTO items (id, type, mob, skey, data, device_id, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(id, type, mob, skey, JSON.stringify(data), dev.id, now, now).run();
@@ -459,8 +472,9 @@ async function deleteItem(request, env, ctx, dev, id, url) {
     purge(ctx, request);
     return json({ ok: true, permanent: true });
   }
-  await ownItem(env, dev, id);
+  const row = await ownItem(env, dev, id);
   await env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE id = ?').bind(Date.now(), id).run();
+  await setFilesHidden(env, [row.data], true);
   purge(ctx, request);
   return json({ ok: true });
 }
@@ -470,10 +484,16 @@ async function restoreItem(request, env, ctx, dev, id) {
   if (!row) throw new Bad('not_found', 404);
   const now = Date.now();
   if (row.skey) {
-    await env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE deleted = 0 AND type = ? AND mob = ? AND skey = ?')
-      .bind(now, row.type, row.mob, row.skey).run();
+    const { results: oldRows } = await env.DB.prepare('SELECT data FROM items WHERE deleted = 0 AND type = ? AND mob = ? AND skey = ?')
+      .bind(row.type, row.mob, row.skey).all();
+    if (oldRows.length) {
+      await env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE deleted = 0 AND type = ? AND mob = ? AND skey = ?')
+        .bind(now, row.type, row.mob, row.skey).run();
+      await setFilesHidden(env, oldRows.map(r => r.data), true);
+    }
   }
   await env.DB.prepare('UPDATE items SET deleted = 0, updated = ? WHERE id = ?').bind(now, id).run();
+  await setFilesHidden(env, [row.data], false);
   purge(ctx, request);
   return json({ ok: true });
 }
@@ -590,13 +610,18 @@ async function adminDeleteKey(request, env, ctx, id, url) {
   const now = Date.now();
   const { results: devs } = await env.DB.prepare('SELECT id FROM devices WHERE key_id = ?').bind(id).all();
   const stmts = devs.map(d => env.DB.prepare('UPDATE devices SET token_hash = ? WHERE id = ?').bind('out:' + rand(16), d.id));
+  let hiddenDatas = [];
   if (hideUploads && devs.length) {
+    const { results: liveRows } = await env.DB.prepare(
+      'SELECT i.data FROM items i JOIN devices d ON d.id = i.device_id WHERE d.key_id = ? AND i.deleted = 0').bind(id).all();
+    hiddenDatas = liveRows.map(r => r.data);
     for (const d of devs) {
       stmts.push(env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE device_id = ? AND deleted = 0').bind(now, d.id));
     }
   }
   stmts.push(env.DB.prepare('DELETE FROM keys WHERE id = ?').bind(id));
   await env.DB.batch(stmts);
+  if (hiddenDatas.length) await setFilesHidden(env, hiddenDatas, true);
   if (hideUploads) purge(ctx, request);
   return json({ ok: true });
 }
@@ -611,10 +636,14 @@ async function adminKickDevice(request, env, ctx, id) {
   if (b.lockKey && dev.key_id) {
     stmts.push(env.DB.prepare('UPDATE keys SET locked = 1 WHERE id = ?').bind(dev.key_id));
   }
+  let hiddenDatas = [];
   if (b.hideUploads) {
+    const { results: liveRows } = await env.DB.prepare('SELECT data FROM items WHERE device_id = ? AND deleted = 0').bind(id).all();
+    hiddenDatas = liveRows.map(r => r.data);
     stmts.push(env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE device_id = ? AND deleted = 0').bind(Date.now(), id));
   }
   await env.DB.batch(stmts);
+  if (hiddenDatas.length) await setFilesHidden(env, hiddenDatas, true);
   if (b.hideUploads) purge(ctx, request);
   return json({ ok: true });
 }
