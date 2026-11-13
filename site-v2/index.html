@@ -21,7 +21,7 @@
   document.documentElement.classList.add('js');
   if (location.protocol === 'file:') document.write('<link rel="stylesheet" href="assets/css/fonts-file.css"><link rel="stylesheet" href="assets/css/fonts-home-file.css">');
   // a vazut deja intro-ul in sesiunea asta: sarim direct la final
-  try { if (sessionStorage.getItem('erasmus-intro') === '1') { window.ERASMUS_SKIP_INTRO = true; document.documentElement.classList.add('skip-intro'); } } catch (e) {}
+  try { var t = +localStorage.getItem('erasmus-intro'); if (t > 0 && Date.now() - t < 30 * 864e5) { window.ERASMUS_SKIP_INTRO = true; document.documentElement.classList.add('skip-intro'); } } catch (e) {}
 </script>
 </head>
 <body data-page="home">

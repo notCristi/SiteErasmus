@@ -14,7 +14,7 @@ Video-ul de fundal il ia singur din `../site/media/`, deci nu trebuie copiat nim
 
 Scroll in sus face pasii inapoi (de la coloane la ERASMUS+, de acolo la logo). Click pe steagul din mijlocul coloanelor te duce tot la ERASMUS+.
 
-Intro-ul cu logo si textul care se scrie apar o data pe sesiune. Ca sa le vezi din nou, inchide tab-ul si deschide-l iar.
+Intro-ul cu logo si textul care se scrie apar o data la 30 de zile in acelasi browser. Browserul tine minte ziua in care l-ai vazut (in `localStorage`), chiar daca inchizi tab-ul sau calculatorul. Pe alt browser, pe alt telefon sau in modul incognito apare din nou. Ca sa il vezi din nou pe acelasi browser: deschide consola (F12) si scrie `localStorage.clear()`, apoi reincarca pagina. Numarul de zile e `ZILE_INTRO` sus in `assets/js/home.js` (si `30` in scriptul mic din `index.html`, sa fie la fel).
 
 Ce schimbi si unde:
 - numele si descrierile din coloane: `index.html`, in `<nav class="cols">`
@@ -39,7 +39,7 @@ Ce schimbi in `assets/js/data.js` nu are nevoie de comanda asta.
 Piesa e `assets/audio/music.mp3`. E deja mixata: incepe incet, creste 3 secunde si la secunda 3,05 intra tare.
 Porneste in timpul sunetului de la logo (la secunda 2,30 a animatiei), asa ca intrarea tare cade exact cand se termina logoul. Canta peste ERASMUS+ si peste textul care se scrie, iar cand apar coloanele se stinge lin. Dupa aceea site-ul e fara muzica.
 
-- Canta o singura data, impreuna cu intro-ul (deci o data pe sesiune). Daca intro-ul nu apare, nu e nici muzica.
+- Canta o singura data, impreuna cu intro-ul (deci o data la 30 de zile). Daca intro-ul nu apare, nu e nici muzica.
 - In stanga jos e butonul rotund de sunet (ramane pe tot site-ul). Cat se aude muzica sau un sunet de click, cele 3 bare se misca; cand il opresti, se opresc atat muzica, cat si sunetele de click, iar alegerea se tine minte.
 - Setarile sunt sus in `assets/js/music.js`: `LOGO_AT` (cand intra fata de logo), `VOLUME` (cat de tare) si `FADE_OUT` (in cat timp se stinge).
 - Ca sa scoti muzica de tot: sterge linia cu `music.js` din `index.html`.

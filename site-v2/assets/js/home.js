@@ -1,7 +1,7 @@
 /* Prima pagina, un singur ecran in patru pasi:
      1. logoul animat
      2. un scroll: logoul se desface (panglicile se trag in cercul de stele), cercul devine steagul UE si urca sus; literele "Erasmus+" din logo raman si devin ERASMUS+ din contur
-     3. inca un scroll: textul care se scrie singur (home-seq.js), o data pe sesiune
+     3. inca un scroll: textul care se scrie singur (home-seq.js), o data la 30 de zile
      4. coloanele (meniul). La click, titlurile urca in meniul paginii alese.
    Scroll in sus face pasii inapoi. */
 (() => {
@@ -15,9 +15,15 @@ const outCubic = t => 1 - Math.pow(1 - t, 3);
 const lerp = (a, b, t) => a + (b - a) * t;
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const overlayOpen = () => html.classList.contains('sheet-open');
-const store = () => { try { sessionStorage.setItem('erasmus-intro', '1'); } catch (e) {} };
-let textVazut = false;   // textul care se scrie singur apare o data pe sesiune
-try { textVazut = sessionStorage.getItem('erasmus-text') === '1'; } catch (e) {}
+// Intro-ul (logoul si textul care se scrie) apare o data la 30 de zile in acelasi browser.
+// Se tine minte in localStorage ziua in care a fost vazut; dupa ZILE_INTRO zile apare din nou.
+const ZILE_INTRO = 30;
+const vazutRecent = key => {
+  try { const t = +localStorage.getItem(key); return t > 0 && Date.now() - t < ZILE_INTRO * 864e5; } catch (e) { return false; }
+};
+const marcheaza = key => { try { localStorage.setItem(key, String(Date.now())); } catch (e) {} };
+const store = () => marcheaza('erasmus-intro');
+let textVazut = vazutRecent('erasmus-text');   // textul care se scrie singur, tot o data la 30 de zile
 
 /* ---------- elementele ---------- */
 const hero = $('hero'), logoEl = $('logo'), fx = $('fx'), fctx = fx.getContext('2d');
@@ -266,7 +272,7 @@ function laColoane(direct) {   // direct = fara zborul steagului (cand ne intoar
   if (faza === 'cols') return;
   if (SEQ) SEQ.stop();
   faza = 'cols'; clasa('cols');
-  textVazut = true; try { sessionStorage.setItem('erasmus-text', '1'); } catch (e) {}
+  textVazut = true; marcheaza('erasmus-text');
   steagJos(reduce || direct === true);
   // cat timp cad coloanele si zboara steagul, mouse-ul nu le largeste (altfel steagul ar ateriza alaturi)
   hero.classList.add('vine'); clearTimeout(vineT); vineT = setTimeout(() => hero.classList.remove('vine'), reduce ? 0 : 1000);
