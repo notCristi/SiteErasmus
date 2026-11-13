@@ -437,7 +437,10 @@ const PANOURI = {
   },
   results(m) {
     return capRubrica(m, 'results', '<p class="muted">What students and teachers thought about the mobility, and what we take from it.</p>') +
-      `<div class="grid hub-grid">${m.results.map((r, i) => `<div class="glass card pop" style="--i:${i}"><h3 class="h3">${tx(r.title)}</h3><p class="muted">${tx(r.text)}</p></div>`).join('')}</div>`;
+      `<div class="grid hub-grid">${m.results.map((r, i) => `<div class="glass card pop" style="--i:${i}"><h3 class="h3">${tx(r.title)}</h3>${
+        // textele urcate prin UPLOAD stau unul sub altul; pana vine primul, ramane textul din data.js
+        r.entries?.length ? `<div class="res-list">${r.entries.map(e => `<div class="res-entry"><p class="muted">${tx(e.text)}</p>${e.file ? `<a class="link-arrow" href="${esc(e.file)}" target="_blank" rel="noopener">Open the file<span class="sr"> (opens in a new tab)</span> ${I.ext}</a>` : ''}</div>`).join('')}</div>`
+          : `<p class="muted">${tx(r.text)}</p>`}</div>`).join('')}</div>`;
   },
   dissemination(m) {
     return capRubrica(m, 'dissemination', '<p class="muted">Where we told others about the mobility: the school website, social media, the press and our school community.</p>') +

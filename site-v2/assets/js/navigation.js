@@ -11,7 +11,8 @@ const local = location.protocol === 'file:';
 let mountedURL, controller, homeMain, leaving = false, queuedPop = null;
 const scriptLoads = new Map();
 const templates = () => window.SITE_PAGES || {};
-const filename = url => url.pathname.split('/').pop() || 'index.html';
+// Cloudflare Pages scoate ".html" din adresa (journey.html devine /journey): pagina e aceeasi.
+const filename = url => { const name = url.pathname.split('/').pop() || 'index.html'; return !name.includes('.') && templates()[name + '.html'] ? name + '.html' : name; };
 
 function currentURL() {
   const url = new URL(location.href);
@@ -87,6 +88,10 @@ async function initPage(page) {
   } else {
     window.PageControllers.content(controller.signal);
     if (page === 'journey') window.PageControllers.journey(controller.signal);
+    if (page === 'upload') {   // pagina UPLOAD isi incarca programul doar cand e deschisa
+      if (!window.PageControllers.upload) await loadScript('assets/js/upload.js');
+      window.PageControllers.upload(controller.signal);
+    }
   }
 }
 function position(url, saved) {
@@ -197,6 +202,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     syncShell(data.page);
     window.PageControllers.content(controller.signal);
     if (data.page === 'journey') window.PageControllers.journey(controller.signal);
+    if (data.page === 'upload') window.PageControllers.upload?.(controller.signal);
     position(url, history.state?.siteScroll);
   }
   history.replaceState({ ...history.state, siteScroll: [scrollX, scrollY] }, '', location.href);

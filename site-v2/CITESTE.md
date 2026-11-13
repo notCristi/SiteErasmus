@@ -92,8 +92,43 @@ Ce e intre `[ ]` trebuie completat. Pe site apare colorat in albastru, ca sa se 
 Pozele le pui de exemplu in `media/poze/` si scrii in data.js:
 `{ type: 'photo', src: 'media/poze/prejmer-1.jpg', caption: 'Prejmer, in the morning' }`
 
+## UPLOAD (in locul lui Contact din meniu)
+Pagina `upload.html`: cere o parola, apoi arata formularul prin care se urca poze, video-uri, articole, materiale, rezultate, linkuri si (doar profesorii si adminul) informatiile mobilitatii, zilele si locurile de pe harta. Ce se urca apare imediat pe site, la toata lumea. Contact a ramas pagina, dar se ajunge la ea doar din subsol (Follow).
+
+Fisierele:
+- `_worker.js` = partea de server (ruleaza la Cloudflare, nu in browser). Verifica parolele, primeste fisierele, le pune in R2 si tine in baza de date D1 cine a urcat ce. Sus in fisier sunt limitele (`MAX`: poza 25 MB, video 300 MB, document 100 MB).
+- `_routes.json` = spune Cloudflare ca doar `/api/...` si `/media/...` trec prin server; restul site-ului se da direct.
+- `assets/js/upload.js` = pagina UPLOAD. `assets/js/cloud.js` = adauga ce s-a urcat peste `data.js`, pe toate paginile.
+- stilul e la finalul lui `assets/css/pages.css` (clasele `.up-...`).
+
+Ce trebuie legat o singura data de proiectul Cloudflare Pages (Settings):
+- `DB` = o baza de date D1
+- `MEDIA` = un bucket R2
+- `ADMIN_KEY` = secret: parola ta de admin, minimum 10 caractere
+Pana atunci site-ul merge normal, iar UPLOAD spune „Upload is not switched on yet”.
+
+Parolele:
+- Intri cu `ADMIN_KEY` si, in dreapta, la „Access keys”, faci cate parole vrei, pe doua feluri: Students si Teachers. Parola noua se vede o singura data, atunci cand o faci.
+- Elevii pot edita si sterge doar ce au urcat de pe dispozitivul lor. Profesorii pot edita si sterge orice si vad in plus „Mobility info” si „Days & places”. Doar adminul vede cine a urcat fiecare lucru (numele scris la intrare + parola folosita).
+- „Turn off” la o parola ii scoate pe toti cei care au intrat cu ea; ce au urcat ramane. Daca schimbi `ADMIN_KEY`, iesi si tu de pe toate dispozitivele.
+- Dupa 8 parole gresite de pe aceeasi adresa, urmeaza 15 minute de pauza.
+- Parolele nu sunt nicaieri in fisierele site-ului. In browser ramane doar un cod de acces al dispozitivului (`localStorage`, „erasmus-upload”), de aceea nu mai cere parola a doua oara.
+
+Ce se intampla cu fisierele:
+- Pozele se micsoreaza in browser inainte de upload (latura lunga 2560 px, WebP la calitate 90%, plus una mica pentru liste). Setarile: `PHOTO`, sus in `upload.js`. Asa dispare si locul (GPS) din datele pozei.
+- Video-urile urca asa cum sunt, cele mari in bucati de 20 MB. PDF-ul se deschide in pagina; PowerPoint si Word se descarca.
+- Pozele adevarate apar in Gallery inaintea locurilor goale, iar articolele scrise inaintea celor goale din Journal. Cand un loc primeste prima poza, locurile lui goale dispar.
+- La Results textele se aduna unul sub altul. „Mobility info” si „Days & places” inlocuiesc ce era.
+
+Ca sa il incerci pe calculator, cu server cu tot (are nevoie de Node.js), in folderul `site-v2`:
+
+    npx wrangler pages dev . --d1 DB --r2 MEDIA --binding ADMIN_KEY=o-parola-de-proba
+
+si deschizi `http://localhost:8788/upload.html`. Cu `porneste-site.bat` site-ul merge, dar UPLOAD nu (acolo nu exista server).
+
 ## Cand il punem live
 Copiezi ce e in `site-v2` peste `site` (folderul `site/media` ramane cum e).
 Nu copia `node_modules`, `tests`, `scripts`, `porneste-site.bat`, `package.json`, `package-lock.json` si `README.md`: sunt doar pentru lucru si verificari, site-ul nu are nevoie de ele (`node_modules` are peste o mie de fisiere).
 Inainte sa copiezi, ruleaza o data `node scripts/build-page-templates.cjs`, ca sa fii sigur ca trecerea intre pagini arata ultimele texte.
+`_worker.js` si `_routes.json` trebuie sa ajunga in radacina folderului publicat (langa `index.html`), altfel UPLOAD nu are server.
 Pagina 404 merge asa cum e pe erasmus-rofrdk.com. Daca site-ul ar sta intr-un subfolder, schimbi `ROOT` in `404.html`.

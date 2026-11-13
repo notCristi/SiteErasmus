@@ -44,7 +44,7 @@ const entryCard = (e, i = 0) => `
       <div class="entry-meta"><span class="tag b">${tx(e.day)}</span><span>${tx(e.date)} · ${esc(mobName(e.mob))}</span></div>
       <h3>${tx(e.title)}</h3>
       <p>${tx(e.excerpt)}</p>
-      <div class="byline">By <b>${tx(e.author)}</b> · ${tx(e.min)} min read</div>
+      <div class="byline">${e.author ? `By <b>${tx(e.author)}</b> · ` : ''}${tx(e.min)} min read</div>
     </div>
   </a>`;
 
@@ -144,14 +144,16 @@ if (page === 'journal') {
         <a class="link-arrow back" href="journal.html">${I.back} All entries</a>
         <div class="entry-meta"><span class="tag b">${tx(e.day)}</span><span>${tx(e.date)} · ${esc(mobName(e.mob))}</span></div>
         <h1>${tx(e.title)}</h1>
-        <div class="byline">By <b>${tx(e.author)}</b> · ${tx(e.min)} min read</div>
-        ${tile({ type: 'photo', caption: e.title, stop: e.id, place: mobName(e.mob), src: e.cover || '' }, 'cover')}
+        <div class="byline">${e.author ? `By <b>${tx(e.author)}</b> · ` : ''}${tx(e.min)} min read</div>
+        ${tile({ type: 'photo', caption: e.title, stop: e.id, place: mobName(e.mob), src: e.coverFull || e.cover || '' }, 'cover')}
         <div class="glass article-body">${e.body.map(p => `<p>${tx(p)}</p>`).join('')}</div>
+        ${e.photos?.length > 1 ? `<div class="article-photos">${e.photos.map((p, j) => `<button type="button" data-j="${j}" aria-label="Open ${esc(p.caption)}">${tile(p)}</button>`).join('')}</div>` : ''}
         <nav class="article-nav" aria-label="More entries">
           ${older ? `<a class="glass" href="#${esc(older.id)}"><span>Older</span><b>${tx(older.title)}</b></a>` : ''}
           ${newer ? `<a class="glass nx" href="#${esc(newer.id)}"><span>Newer</span><b>${tx(newer.title)}</b></a>` : ''}
         </nav>
       </article>`;
+    root.querySelectorAll('.article-photos [data-j]').forEach(b => b.addEventListener('click', () => U.lightbox(e.photos, +b.dataset.j)));
   }
   function ruta() {
     let id = ''; try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) {}

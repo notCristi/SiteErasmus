@@ -69,15 +69,15 @@ const hash = s => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charCo
 function tile(m, cls = '') {
   const h = hash(m.caption + m.stop);
   const label = m.type === 'video' ? 'Video' : 'Photo';
-  if (m.src && m.type === 'photo') return `<div class="media ${cls}"><img src="${esc(m.src)}" alt="${esc(m.caption)}" loading="lazy" decoding="async"></div>`;
-  if (m.src && m.type === 'video') return `<div class="media ${cls}"><video src="${esc(m.src)}" ${m.poster ? `poster="${esc(m.poster)}"` : ''} muted playsinline preload="metadata"></video><span class="play-badge">${I.play}</span></div>`;
+  if (m.src && m.type === 'photo') return `<div class="media ${cls}"><img src="${esc(m.thumb || m.src)}" alt="${esc(m.caption)}" loading="lazy" decoding="async"></div>`;
+  if (m.src && m.type === 'video') return `<div class="media ${cls}"><video src="${esc(m.src)}" ${m.poster || m.thumb ? `poster="${esc(m.poster || m.thumb)}"` : ''} muted playsinline preload="${m.thumb ? 'none' : 'metadata'}"></video><span class="play-badge">${I.play}</span></div>`;
   return `<div class="ph ${cls}" style="--px:${15 + h % 70}%;--py:${5 + (h >> 7) % 50}%">${m.type === 'video' ? I.video : I.photo}<span>${esc(label)} · ${esc(m.place || '')}</span>${m.embed ? `<span class="play-badge">${I.play}</span>` : ''}</div>`;
 }
 
 /* ---------- meniul ---------- */
 const LINKS = [
   ['about', 'About', 'about.html'], ['partners', 'Partners', 'partners.html'], ['journey', 'Journey', 'journey.html'],
-  ['journal', 'Journal', 'journal.html'], ['gallery', 'Gallery', 'gallery.html'], ['contact', 'Contact', 'contact.html'],
+  ['journal', 'Journal', 'journal.html'], ['gallery', 'Gallery', 'gallery.html'], ['upload', 'Upload', 'upload.html'],
 ];
 const cur = id => (id === page ? ' aria-current="page"' : '');
 const lnk = ([id, t, href]) => `<a class="lnk" href="${href}"${cur(id)}>${t}</a>`;
@@ -197,7 +197,7 @@ function lbShow(i) {
   const m = lbItems[lbI];
   let h;
   if (m.embed) h = `<iframe src="${esc(m.embed)}" allow="autoplay; fullscreen" allowfullscreen title="${esc(m.caption)}"></iframe>`;
-  else if (m.src && m.type === 'video') h = `<video src="${esc(m.src)}" ${m.poster ? `poster="${esc(m.poster)}"` : ''} controls autoplay playsinline></video>`;
+  else if (m.src && m.type === 'video') h = `<video src="${esc(m.src)}" ${m.poster || m.thumb ? `poster="${esc(m.poster || m.thumb)}"` : ''} controls autoplay playsinline></video>`;
   else if (m.src) h = `<img src="${esc(m.src)}" alt="${esc(m.caption)}">`;
   else h = tile(m);
   lbStage.innerHTML = h;
