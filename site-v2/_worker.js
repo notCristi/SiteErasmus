@@ -12,12 +12,8 @@
 const MB = 1024 * 1024;
 const MAX = { image: 25 * MB, video: 300 * MB, doc: 100 * MB };   // marimea maxima a unui fisier
 const PART = 20 * MB;                                            // fisierele mari urca in bucati de atat
-const DAY_BYTES = 600 * MB;                                      // cat poate urca un dispozitiv in 24 de ore
-const DAY_BYTES_KEY = 2500 * MB;                                 // ...si cat pot urca, impreuna, toti cei cu aceeasi parola
 const MAX_TOTAL_BYTES = Math.round(8.5 * 1024 * MB);             // plafon global in R2 (sub limita gratuita de 10 GB)
-const ADMIN_IDLE_MS = 24 * 3600 * 1000;                          // sesiunea de admin expira dupa 24h de inactivitate
-const ADMIN_MAX_MS = 7 * 24 * 3600 * 1000;                       // ...sau la 7 zile de la autentificare
-const USER_MAX_MS = 30 * 24 * 3600 * 1000;                       // sesiunile elevi/profesori expira la 30 de zile
+const MEDIA_CACHE = 'public, max-age=2592000';                   // pozele si clipurile raman 30 de zile in memoria browserului
 const TRASH_DAYS_MS = 7 * 24 * 3600 * 1000;                      // postarile ascunse se sterg definitiv dupa 7 zile
 const ORPHAN_MS = 24 * 3600 * 1000;                              // fisierele nepublicate/intrerupte se curata dupa 24h
 const FILES = {
@@ -114,11 +110,9 @@ async function auth(request, env) {
   const now = Date.now();
   if (dev.role === 'admin') {
     if (!adminOn(env) || !(await same(dev.adm || '', await adminHash(env)))) return null;   // parola de admin schimbata = toti adminii ies
-    if (now - dev.seen > ADMIN_IDLE_MS || now - dev.created > ADMIN_MAX_MS) return null;
   } else {
     if (!dev.k_active) return null;                                                          // parola anulata = toti cei cu ea ies
     if (dev.k_expires > 0 && now > dev.k_expires) return null;
-    if (now - dev.created > USER_MAX_MS) return null;
   }
   if (now - dev.seen > 15 * 60 * 1000) await env.DB.prepare('UPDATE devices SET seen = ? WHERE id = ?').bind(now, dev.id).run();
   return dev;
@@ -217,19 +211,6 @@ async function cleanup(env) {
 }
 
 /* ---------- fisierele (R2) ---------- */
-const seqMatch = (bytes, sig, offset = 0) => bytes.length >= offset + sig.length && sig.every((v, i) => bytes[offset + i] === v);
-const asciiAt = (bytes, offset, len) => bytes.length >= offset + len ? String.fromCharCode(...bytes.slice(offset, offset + len)) : '';
-function checkMagic(bytes, e) {
-  if (e === 'jpg' || e === 'jpeg') return seqMatch(bytes, [0xFF, 0xD8, 0xFF]);
-  if (e === 'png') return seqMatch(bytes, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-  if (e === 'webp') return asciiAt(bytes, 0, 4) === 'RIFF' && asciiAt(bytes, 8, 4) === 'WEBP';
-  if (e === 'pdf') return asciiAt(bytes, 0, 5) === '%PDF-';
-  if (e === 'docx' || e === 'pptx') return seqMatch(bytes, [0x50, 0x4B, 0x03, 0x04]);
-  if (e === 'doc' || e === 'ppt') return seqMatch(bytes, [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
-  if (e === 'mp4' || e === 'm4v' || e === 'mov') return ['ftyp', 'moov', 'wide', 'mdat', 'free', 'skip', 'pnot'].includes(asciiAt(bytes, 4, 4));
-  if (e === 'webm') return seqMatch(bytes, [0x1A, 0x45, 0xDF, 0xA3]);
-  return false;
-}
 function describe(url) {
   const name = str(url.searchParams.get('name'), 120), e = ext(name), def = FILES[e];
   const size = Number(url.searchParams.get('size'));
@@ -243,13 +224,7 @@ const r2meta = f => ({ httpMetadata: { contentType: f.type }, customMetadata: { 
 async function quota(env, dev, size) {
   const total = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM files').first('n');
   if (total + size > MAX_TOTAL_BYTES) throw new Bad('storage_full', 429);
-  if (dev.role !== 'admin') {
-    const used = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM files WHERE device_id = ? AND created > ?').bind(dev.id, Date.now() - 24 * 3600 * 1000).first('n');
-    if (used + size > DAY_BYTES) throw new Bad('daily_limit', 429);
-  }
   if (dev.key_id) {
-    const dayKey = await env.DB.prepare('SELECT COALESCE(SUM(f.size), 0) AS n FROM files f JOIN devices d ON d.id = f.device_id WHERE d.key_id = ? AND f.created > ?').bind(dev.key_id, Date.now() - 24 * 3600 * 1000).first('n');
-    if (dayKey + size > DAY_BYTES_KEY) throw new Bad('daily_limit', 429);
     const kRow = await env.DB.prepare('SELECT quota_mb FROM keys WHERE id = ?').bind(dev.key_id).first();
     if (kRow && kRow.quota_mb > 0) {
       const totalKey = await env.DB.prepare('SELECT COALESCE(SUM(f.size), 0) AS n FROM files f JOIN devices d ON d.id = f.device_id WHERE d.key_id = ?').bind(dev.key_id).first('n');
@@ -266,14 +241,11 @@ async function putFile(request, env, dev, url) {
   if (!buf.byteLength) throw new Bad('bad_size');
   if (buf.byteLength > MAX[f.cls] || buf.byteLength > 95 * MB) throw new Bad('file_too_big', 413);
   if (buf.byteLength > f.size) await quota(env, dev, buf.byteLength);
-  if (!checkMagic(new Uint8Array(buf, 0, Math.min(32, buf.byteLength)), f.ext)) throw new Bad('file_type');
   await env.MEDIA.put(f.key, buf, r2meta(f));
   await env.DB.prepare('INSERT INTO files (key, device_id, size, cls, name, created) VALUES (?, ?, ?, ?, ?, ?)').bind(f.key, dev.id, buf.byteLength, f.cls, f.name, Date.now()).run();
   return json({ key: f.key, size: buf.byteLength });
 }
 async function partsStart(env, dev, url) {
-  const openParts = await env.DB.prepare('SELECT COUNT(*) AS n FROM files WHERE device_id = ? AND upload_id IS NOT NULL').bind(dev.id).first('n');
-  if (openParts >= 3) throw new Bad('too_many_uploads', 429);
   const f = describe(url);
   await quota(env, dev, f.size);
   const up = await env.MEDIA.createMultipartUpload(f.key, r2meta(f));
@@ -291,19 +263,7 @@ async function partsPut(request, env, dev, url) {
   const n = Number(url.searchParams.get('n'));
   if (!Number.isInteger(n) || n < 1 || n > Math.ceil(MAX[row.cls] / PART) + 1) throw new Bad('bad_part');
   if (Number(request.headers.get('content-length')) > PART + MB) throw new Bad('part_too_big', 413);
-  let bodyData = request.body;
-  if (n === 1) {
-    const buf = await request.arrayBuffer();
-    if (!buf.byteLength) throw new Bad('bad_part');
-    if (buf.byteLength > PART + MB) throw new Bad('part_too_big', 413);
-    if (!checkMagic(new Uint8Array(buf, 0, Math.min(32, buf.byteLength)), ext(row.key))) {
-      await up.abort().catch(() => {});
-      await env.DB.prepare('DELETE FROM files WHERE key = ?').bind(row.key).run();
-      throw new Bad('file_type');
-    }
-    bodyData = buf;
-  }
-  const part = await up.uploadPart(n, bodyData);
+  const part = await up.uploadPart(n, request.body);
   return json({ partNumber: part.partNumber, etag: part.etag });
 }
 async function partsDone(request, env, dev, url) {
@@ -342,7 +302,7 @@ async function setFilesHidden(env, datas, hidden) {
   if (!keys.length) return;
   await env.DB.batch(keys.map(k => env.DB.prepare('UPDATE files SET hidden = ? WHERE key = ?').bind(hidden ? 1 : 0, k)));
 }
-// pozele si fisierele se dau direct din R2; cache-control: public, no-cache revalideaza prin ETag (daca ajunge in Trash, devine imediat 404)
+// pozele si fisierele se dau direct din R2 si raman in memoria browserului (o postare din Trash da 404 la orice cerere noua)
 async function media(request, env, key) {
   if (!fileKey(key)) return new Response('Not found', { status: 404 });
   if (env.DB) {
@@ -357,7 +317,7 @@ async function media(request, env, key) {
   const h = new Headers();
   obj.writeHttpMetadata(h);
   h.set('etag', obj.httpEtag);
-  h.set('cache-control', 'public, no-cache');
+  h.set('cache-control', MEDIA_CACHE);
   h.set('accept-ranges', 'bytes');
   h.set('x-content-type-options', 'nosniff');
   const type = (FILES[ext(key)] || [])[0] || 'application/octet-stream';

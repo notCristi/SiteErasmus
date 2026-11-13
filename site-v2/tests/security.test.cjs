@@ -214,22 +214,16 @@ test('access keys: atomic max_devices, device kick + lockKey, key deletion', asy
   assert.equal(keys.length, 0);
 });
 
-test('magic bytes, PDF viewer headers, /media/* Trash 404 blocking, and unfinished multipart cap', async () => {
+test('file types by extension, PDF viewer headers, /media/* caching, Trash 404 blocking, and no cap on unfinished multipart uploads', async () => {
   const worker = await loadWorker();
   const { env, MEDIA, req } = makeHarness(worker);
   const admTok = (await (await req('/api/login', { method: 'POST', json: { key: env.ADMIN_KEY, name: 'Admin' } })).json()).token;
 
-  // Reject SVG and spoofed PNG
+  // SVG is still refused (not on the extension list); the first bytes of a file are no longer inspected,
+  // so a clip whose header looks unusual is not rejected any more
   assert.equal((await req('/api/files?name=x.svg&size=6', { method: 'POST', token: admTok, body: new TextEncoder().encode('<svg/>') })).status, 400);
-  assert.equal((await req('/api/files?name=x.png&size=18', { method: 'POST', token: admTok, body: new TextEncoder().encode('<script>1</script>') })).status, 400);
-
-  // Magic offsets: MP4 ftyp at offset 4 passes, at offset 0 fails; WebP RIFF+WEBP passes
-  const goodMp4 = new Uint8Array([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x6D, 0x70, 0x34, 0x32]);
-  const badMp4 = new Uint8Array([0x66, 0x74, 0x79, 0x70, 0x00, 0x00, 0x00, 0x00, 0x6D, 0x70, 0x34, 0x32]);
-  const goodWebp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
-  assert.equal((await req('/api/files?name=v.mp4&size=' + goodMp4.length, { method: 'POST', token: admTok, body: goodMp4 })).status, 200);
-  assert.equal((await req('/api/files?name=bad.mp4&size=' + badMp4.length, { method: 'POST', token: admTok, body: badMp4 })).status, 400);
-  assert.equal((await req('/api/files?name=w.webp&size=' + goodWebp.length, { method: 'POST', token: admTok, body: goodWebp })).status, 200);
+  const oddMp4 = new Uint8Array([0x66, 0x74, 0x79, 0x70, 0x00, 0x00, 0x00, 0x00, 0x6D, 0x70, 0x34, 0x32]);
+  assert.equal((await req('/api/files?name=odd.mp4&size=' + oddMp4.length, { method: 'POST', token: admTok, body: oddMp4 })).status, 200);
 
   // Upload valid PNG + valid PDF + valid DOCX
   const pngBytes = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D]);
@@ -243,6 +237,8 @@ test('magic bytes, PDF viewer headers, /media/* Trash 404 blocking, and unfinish
   const pngRes = await req('/media/' + pngKey);
   assert.equal(pngRes.headers.get('content-security-policy'), "default-src 'none'; sandbox");
   assert.equal(pngRes.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(pngRes.headers.get('content-type'), 'image/png');
+  assert.equal(pngRes.headers.get('cache-control'), 'public, max-age=2592000');   // no revalidation on every visit
 
   const docxRes = await req('/media/' + docxKey);
   assert.equal(docxRes.headers.get('content-security-policy'), "default-src 'none'; sandbox");
@@ -263,20 +259,34 @@ test('magic bytes, PDF viewer headers, /media/* Trash 404 blocking, and unfinish
   assert.equal((await req(`/api/items/${item.id}/restore`, { method: 'POST', token: admTok })).status, 200);
   assert.equal((await req('/media/' + pngKey)).status, 200);
 
-  // Max 3 concurrent unfinished multipart uploads per device
-  const startedKeys = [];
-  for (let i = 0; i < 3; i++) {
-    const r = await req(`/api/files/parts?name=big${i}.mp4&size=1024`, { method: 'POST', token: admTok });
-    assert.equal(r.status, 200);
-    startedKeys.push((await r.json()).key);
+  // No cap on unfinished multipart uploads: a dropped connection never locks the device out
+  for (let i = 0; i < 6; i++) {
+    assert.equal((await req(`/api/files/parts?name=big${i}.mp4&size=1024`, { method: 'POST', token: admTok })).status, 200);
   }
-  const fourth = await req('/api/files/parts?name=big3.mp4&size=1024', { method: 'POST', token: admTok });
-  assert.equal(fourth.status, 429);
-  assert.equal((await fourth.json()).error, 'too_many_uploads');
+});
 
-  // Aborting one frees a slot
-  assert.equal((await req('/api/files/parts?key=' + encodeURIComponent(startedKeys[0]), { method: 'DELETE', token: admTok })).status, 200);
-  assert.equal((await req('/api/files/parts?name=big4.mp4&size=1024', { method: 'POST', token: admTok })).status, 200);
+test('sessions do not expire with time and there is no daily upload limit', async () => {
+  const worker = await loadWorker();
+  const { DB, env, req } = makeHarness(worker);
+  const admTok = (await (await req('/api/login', { method: 'POST', json: { key: env.ADMIN_KEY, name: 'Admin' } })).json()).token;
+  const made = await (await req('/api/admin/keys', { method: 'POST', token: admTok, json: { label: 'Class', role: 'student' } })).json();
+  const stuTok = (await (await req('/api/login', { method: 'POST', json: { key: made.key, name: 'Student' } })).json()).token;
+
+  // Both sessions were created and last seen a year ago: still signed in
+  const yearAgo = Date.now() - 365 * 24 * 3600 * 1000;
+  DB._db.prepare('UPDATE devices SET created = ?, seen = ?').run(yearAgo, yearAgo);
+  assert.equal((await req('/api/mine', { token: admTok })).status, 200);
+  assert.equal((await req('/api/mine', { token: stuTok })).status, 200);
+
+  // The student already uploaded 5 GB today: the next file still goes through
+  const stuDev = DB._db.prepare("SELECT id FROM devices WHERE role != 'admin'").get().id;
+  DB._db.prepare('INSERT INTO files (key, device_id, size, cls, created) VALUES (?, ?, ?, ?, ?)').run(`video/2026-11/${'b'.repeat(24)}.mp4`, stuDev, 5 * 1024 * 1024 * 1024, 'video', Date.now());
+  const jpg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]);
+  assert.equal((await req('/api/files?name=a.jpg&size=4', { method: 'POST', token: stuTok, body: jpg })).status, 200);
+
+  // A key turned off by the admin still signs its devices out
+  assert.equal((await req(`/api/admin/keys/${made.id}`, { method: 'PUT', token: admTok, json: { active: 0 } })).status, 200);
+  assert.equal((await req('/api/mine', { token: stuTok })).status, 401);
 });
 
 test('orphan cleanup deletes >24h unlinked files even after >100 published files exist', async () => {

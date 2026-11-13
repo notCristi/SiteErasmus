@@ -838,7 +838,7 @@ function deleteKeyDialog(k) {
   dialog(`Delete key “${k.label}”?`, box, 'Delete key', () => api('DELETE', `/admin/keys/${k.id}${hideChk.checked ? '?hide_uploads=1' : ''}`), true);
 }
 function kickDeviceDialog(k, d, hideOnly = false) {
-  const lockChk = el('input', { type: 'checkbox', name: 'lockKey', checked: !hideOnly && !k.locked });
+  const lockChk = el('input', { type: 'checkbox', name: 'lockKey', checked: false });
   const hideChk = el('input', { type: 'checkbox', name: 'hideUploads', checked: hideOnly });
   const box = el('div', { class: 'up-dialog-body' },
     el('p', { class: 'muted', text: hideOnly
@@ -847,7 +847,7 @@ function kickDeviceDialog(k, d, hideOnly = false) {
   );
   if (!hideOnly) {
     box.appendChild(el('label', { class: 'up-check' }, lockChk,
-      el('span', null, `Lock “${k.label}” for new devices`, el('small', { text: 'Recommended so this person cannot sign in again with the same key.' }))
+      el('span', null, `Lock “${k.label}” for new devices`, el('small', { text: 'Tick this so this person cannot sign in again with the same key.' }))
     ));
   }
   if (d.uploads > 0) {
