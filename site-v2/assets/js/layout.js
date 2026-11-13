@@ -14,6 +14,12 @@ window.addEventListener('hashchange', resetPageScroll);
 const markScrolled = () => document.documentElement.classList.toggle('scrolled', window.scrollY > 12);
 window.addEventListener('scroll', markScrolled, { passive: true });
 markScrolled();
+// .at-end = esti la finalul paginii (sau pagina nu se deruleaza). Pe iPhone, doar atunci fundalul se topeste in negru jos (site.css, .edges).
+const markEnd = () => { const d = document.documentElement; d.classList.toggle('at-end', window.innerHeight + window.scrollY >= d.scrollHeight - 24); };
+window.addEventListener('scroll', markEnd, { passive: true });
+window.addEventListener('resize', markEnd);
+if ('ResizeObserver' in window) new ResizeObserver(markEnd).observe(document.body);   // pagina noua sau continut care se incarca
+markEnd();
 
 /* ---------- iconite ---------- */
 const I = {

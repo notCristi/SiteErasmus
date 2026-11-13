@@ -90,9 +90,12 @@ html{-webkit-tap-highlight-color:transparent}
   .bg{background-color:#000}
   .fundal{background:linear-gradient(var(--noapte),var(--noapte)) #000}
   .edges{display:block;position:absolute;inset:0;z-index:4;pointer-events:none;--edge-top:120px;--edge-bottom:150px;--edge:0,0,0;
-    background:
-      linear-gradient(180deg,rgb(var(--edge)) 0,rgba(var(--edge),.82) 16%,rgba(var(--edge),.5) 42%,rgba(var(--edge),.18) 72%,rgba(var(--edge),0) 100%) top/100% var(--edge-top) no-repeat,
-      linear-gradient(0deg,rgb(var(--edge)) 0,rgba(var(--edge),.82) 16%,rgba(var(--edge),.5) 42%,rgba(var(--edge),.18) 72%,rgba(var(--edge),0) 100%) bottom/100% var(--edge-bottom) no-repeat}
+    background:linear-gradient(180deg,rgb(var(--edge)) 0,rgba(var(--edge),.82) 16%,rgba(var(--edge),.5) 42%,rgba(var(--edge),.18) 72%,rgba(var(--edge),0) 100%) top/100% var(--edge-top) no-repeat}
+  /* Jos, negrul apare doar la finalul paginii. Cat mai e pagina de derulat, continutul trece liber pe sub bara Safari.
+     .at-end il pune assets/js/layout.js (pe paginile care nu se deruleaza, ca prima pagina, e mereu pus). */
+  .edges::after{content:'';position:absolute;inset:auto 0 0;height:var(--edge-bottom);opacity:0;transition:opacity .35s ease;
+    background:linear-gradient(0deg,rgb(var(--edge)) 0,rgba(var(--edge),.82) 16%,rgba(var(--edge),.5) 42%,rgba(var(--edge),.18) 72%,rgba(var(--edge),0) 100%)}
+  html.at-end .edges::after{opacity:1}
   /* meniul de sus, cand pagina e derulata, porneste tot din negru */
   header.section-nav::before{background:linear-gradient(180deg,rgba(0,0,0,.96) 0%,rgba(4,9,24,.84) 58%,rgba(7,14,38,0) 100%)}
 }
