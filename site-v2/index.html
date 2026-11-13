@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en" class="lock">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Erasmus+ · United in Diversity, Stronger Through Participation</title>
+<meta name="description" content="Erasmus+ project of Cours Secondaire d'Orsay, Fjerritslev Gymnasium and Colegiul Național „Johannes Honterus”. Map, photos and stories from every trip.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#FCF9F2">
+<link rel="icon" href="assets/img/icon.svg" type="image/svg+xml">
+<link rel="preload" href="assets/fonts/big-shoulders-display-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/css/site.css">
+<link rel="stylesheet" href="assets/css/navigation.css">
+<script src="assets/js/page-templates.js"></script>
+<script src="assets/js/navigation.js"></script>
+<link rel="stylesheet" href="assets/css/pages.css">
+<link rel="stylesheet" href="assets/css/home.css">
+<script>
+  document.documentElement.classList.add('js');
+  if (location.protocol === 'file:') document.write('<link rel="stylesheet" href="assets/css/fonts-file.css"><link rel="stylesheet" href="assets/css/fonts-home-file.css">');
+  // a vazut deja intro-ul in sesiunea asta: sarim direct la final
+  try { if (sessionStorage.getItem('erasmus-intro') === '1') { window.ERASMUS_SKIP_INTRO = true; document.documentElement.classList.add('skip-intro'); } } catch (e) {}
+</script>
+</head>
+<body data-page="home">
+
+<div class="bg" id="bg" aria-hidden="true">
+  <video id="bgv0" class="bgv off" muted playsinline preload="metadata"></video>
+  <video id="bgv1" class="bgv off" muted playsinline preload="none"></video>
+  <div class="shade"></div>
+  <div class="vig"></div>
+  <div class="dim" id="dim"></div>
+</div>
+<div class="cream" id="cream" aria-hidden="true"></div>
+
+<main id="main">
+
+  <!-- ===== un singur ecran, in patru pasi:
+       1. intro cu logo  2. ERASMUS+  3. textul care se scrie singur  4. coloanele (meniul) ===== -->
+  <section class="hero" id="hero" aria-label="Welcome">
+    <div class="hero-txt" id="heroTxt">
+      <h1 class="mega"><span class="sr">Erasmus+</span><span class="mega-in" id="megaIn" aria-hidden="true"><span>E</span><span>R</span><span>A</span><span>S</span><span>M</span><span>U</span><span>S</span><span class="plus"><b>+</b></span></span></h1>
+      <p class="motto" id="motto">United in Diversity, Stronger Through Participation</p>
+    </div>
+
+    <!-- textul care se scrie singur (il face assets/js/home-seq.js); pentru cititoarele de ecran e propozitia de mai jos -->
+    <p class="sr">Three schools. Three countries. One shared story, told by the students who lived it and loved it.</p>
+    <div class="seq" id="seq" aria-hidden="true">
+      <div class="seq-box" id="seqBox"></div>
+      <i class="seq-line" id="seqLine"></i>
+    </div>
+
+    <!-- coloanele: numele si descrierea fiecarei pagini se schimba aici -->
+    <nav class="cols" id="menu" aria-label="Pages">
+      <a class="col" href="about.html"><span class="col-n">01</span><span class="col-t">About</span><span class="col-d">What the project is about, our goals and the people behind it.</span><span class="col-a"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
+      <a class="col" href="partners.html"><span class="col-n">02</span><span class="col-t">Partners</span><span class="col-d">Meet the three schools from France, Denmark and Romania.</span><span class="col-a"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
+      <a class="col" href="journey.html"><span class="col-n">03</span><span class="col-t">Journey</span><span class="col-d">A map of every trip, with photos and videos from each place.</span><span class="col-a"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
+      <span class="cols-mid"><button class="cols-flag" id="colsFlag" type="button" aria-label="Back to Erasmus+"></button></span>
+      <a class="col" href="journal.html"><span class="col-n">04</span><span class="col-t">Journal</span><span class="col-d">Stories from every trip, written by the students, day by day.</span><span class="col-a"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
+      <a class="col" href="gallery.html"><span class="col-n">05</span><span class="col-t">Gallery</span><span class="col-d">All the photos and videos from the project in one place.</span><span class="col-a"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
+      <a class="col" href="contact.html"><span class="col-n">06</span><span class="col-t">Contact</span><span class="col-d">Write to us or follow the project.</span><span class="col-a"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
+    </nav>
+
+    <div class="logo" id="logo" aria-label="Animated Erasmus+ logo" role="img">
+      <canvas id="c" width="1536" height="1024"></canvas>
+    </div>
+    <canvas id="gl" aria-hidden="true"></canvas>
+    <canvas id="fx" aria-hidden="true"></canvas>
+
+    <button id="start" type="button" hidden>
+      <span class="ring"><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="#003399"/></svg></span>
+      Play with sound
+    </button>
+    <button class="skip" id="skip" type="button">Skip intro</button>
+    <button class="seq-skip" id="seqSkip" type="button">Skip <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button class="hint" id="hint" type="button">Scroll
+      <svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+    </button>
+    <a class="explore" id="explore" href="#menu">Explore
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+  </section>
+
+</main>
+
+<script src="assets/js/data.js"></script>
+<script src="assets/js/layout.js"></script>
+<script src="assets/js/background-video.js"></script>
+<script src="assets/js/pages.js"></script>
+<script src="assets/js/europe.js"></script>
+<script src="assets/js/coast-dk.js"></script>
+<script src="assets/js/journey.js"></script>
+<script src="assets/js/logo-data.js"></script>
+<script src="assets/js/logo-anim.js"></script>
+<script src="assets/js/home-seq.js"></script>
+<script src="assets/js/home.js"></script>
+</body>
+</html>

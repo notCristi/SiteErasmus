@@ -1,0 +1,11 @@
+{
+  "name": "erasmus-site",
+  "private": true,
+  "scripts": {
+    "build:pages": "node scripts/build-page-templates.cjs",
+    "test": "node scripts/build-page-templates.cjs --check && node --test tests/*.test.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "27.4.0"
+  }
+}

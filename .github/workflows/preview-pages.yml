@@ -1,0 +1,42 @@
+# Branch-ul "preview": site-ul nou (site-v2) pe GitHub Pages, ca sa il vada profesorul inainte de publicare.
+# Site-ul public (Cloudflare Pages) ramane pe main, neschimbat.
+name: Preview on GitHub Pages
+on:
+  push:
+    branches: [preview]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build preview folder
+        run: |
+          node site-v2/scripts/build-page-templates.cjs
+          mkdir -p _site
+          rsync -a --exclude node_modules --exclude tests --exclude scripts \
+            --exclude package.json --exclude package-lock.json --exclude README.md \
+            --exclude CITESTE.md --exclude .gitignore site-v2/ _site/
+          mkdir -p _site/media
+          cp site/media/* _site/media/
+          # site-ul sta in subfolderul /SiteErasmus/ pe github.io
+          sed -i "s#var ROOT = '/';#var ROOT = '/SiteErasmus/';#" _site/404.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

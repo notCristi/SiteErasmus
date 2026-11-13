@@ -1,0 +1,243 @@
+/* =========== Prima pagina: intro cu logo + fundal video =========== */
+html.lock,html.lock body{overflow:hidden;overscroll-behavior:none}
+
+/* fundalul video sta fix in spatele intregii pagini; se intuneca la scroll */
+/* straturile fundalului (.bg: umbra, vigneta, intunecare, blur) sunt in site.css, la fel pentru toate paginile */
+
+/* intro: crem peste tot, logoul animat in mijloc */
+.cream{position:fixed;inset:0;z-index:10;background:var(--crem)}
+.hero{position:relative;height:100vh;height:100svh;min-height:480px}
+.logo{position:absolute;left:50%;top:50%;z-index:15;width:min(100vw,calc(100vh * 1.5));aspect-ratio:3/2;transform:translate(-50%,-50%)}
+@supports (height:100svh){.logo{width:min(100vw,calc(100svh * 1.5))}}
+.logo canvas{display:block;width:100%;height:100%}
+#gl,#fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#gl{z-index:18}
+#fx{z-index:60}   /* peste meniu: steagul zboara in meniu si nu trebuie estompat de sticla */
+
+#start{position:absolute;left:50%;top:50%;z-index:70;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:12px;border:0;background:none;cursor:pointer;font:600 15px var(--font);color:var(--cerneala);padding:8px}
+#start .ring{width:84px;height:84px;border-radius:50%;background:#fff;border:2px solid rgba(0,51,153,.8);display:flex;align-items:center;justify-content:center;padding-left:5px;box-shadow:0 12px 32px rgba(0,51,153,.16);transition:transform .25s ease,box-shadow .25s ease}
+#start:hover .ring{transform:scale(1.06);box-shadow:0 14px 38px rgba(0,51,153,.24)}
+#start:focus-visible{outline:3px solid var(--albastru);outline-offset:6px;border-radius:16px}
+
+.skip{position:absolute;right:max(20px, env(safe-area-inset-right, 0px));top:var(--nav-top);z-index:70;height:40px;padding:0 16px;border-radius:999px;cursor:pointer;
+  border:1px solid rgba(16,32,74,.18);background:rgba(255,255,255,.6);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font:600 13px var(--font);color:var(--cerneala);transition:opacity .3s ease}
+.skip:hover{background:#fff}
+.skip:focus-visible{outline-color:var(--albastru)}
+.hint{position:absolute;left:50%;bottom:max(20px, env(safe-area-inset-bottom, 0px));z-index:70;transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:8px 12px;border:0;background:none;cursor:pointer;font:600 14px var(--font);color:var(--albastru);opacity:0;visibility:hidden}
+.hint:focus-visible{outline-color:var(--albastru)}
+.hint.on{animation:sari 1.5s ease-in-out infinite}
+@keyframes sari{0%,100%{translate:0 0}50%{translate:0 6px}}
+
+/* ---------- ERASMUS+ mare, din contur, si motto-ul ----------
+   Literele din logo raman pe ecran si devin literele astea (home.js muta fiecare <span>). */
+.hero-txt{position:absolute;left:0;right:0;top:110px;bottom:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(18px,3.2vh,34px);padding:0 16px 6vh;text-align:center;
+  transition:opacity .5s ease,transform .7s cubic-bezier(.2,.8,.2,1)}
+.mega{--fs:clamp(64px, min(20vw, 25vh), 250px);font-size:var(--fs);line-height:1;filter:drop-shadow(0 6px 24px rgba(0,0,0,.45))}
+.mega-in{--sy:1.5;display:flex;align-items:flex-end;margin-top:.5em;transform:scaleY(var(--sy));transform-origin:50% 100%;
+  font:800 1em/1 var(--disp);letter-spacing:.012em;color:transparent;-webkit-text-stroke:clamp(1.4px,.0105em,2.4px) var(--crem)}
+.mega-in span{display:block;will-change:transform,opacity}
+.mega-in i{display:inline-block;width:0;height:0}   /* arata unde e linia de baza a literei */
+/* plusul nu e intins ca literele: il strangem inapoi aproape la forma lui (home.js ii pune centrul).
+   --plus = cat de inalt e fata de forma lui normala: 1 = exact 1:1, 1.12 = cu 12% mai inalt */
+.mega-in .plus{margin-left:.05em;--plus:1.12}
+.mega-in .plus b{display:inline-block;font-weight:inherit;transform:scaleY(calc(var(--plus) / var(--sy)))}
+.motto{max-width:34em;font:500 clamp(15px,1.55vw,20px)/1.45 var(--font);letter-spacing:.02em;color:var(--text-2);text-wrap:balance}
+.explore{position:absolute;left:50%;bottom:max(22px, env(safe-area-inset-bottom, 0px));z-index:6;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px;
+  font:600 12px var(--font);letter-spacing:.2em;text-transform:uppercase;text-decoration:none;color:var(--text-2);opacity:0;visibility:hidden;transition:opacity .4s ease,visibility 0s linear .4s}
+.explore svg{width:18px;height:18px;animation:sari 1.6s ease-in-out infinite}
+.explore:hover{color:#fff}
+.hero.is-hero .explore{opacity:1;visibility:visible;transition:opacity .4s ease .3s}
+/* cand incepe textul sau apar coloanele, ERASMUS+ pleaca */
+.hero.is-seq .hero-txt,.hero.is-cols .hero-txt{opacity:0;transform:translateY(-4vh) scale(1.05);pointer-events:none}
+
+/* ---------- sus ramane doar steagul UE (bara cu About, Partners... nu mai apare pe prima pagina) ---------- */
+body[data-page="home"]{--divider:rgba(255,255,255,.16);--flag-rim:8px}
+body[data-page="home"] .nav{position:absolute}
+body[data-page="home"] .nav-glass,body[data-page="home"] .nav-side{display:none}
+body[data-page="home"] .nav-in{display:flex;justify-content:center}
+html:not(.skip-intro) body[data-page="home"] .nav{visibility:hidden}
+body[data-page="home"] .nav .flag svg{opacity:0}
+html.skip-intro body[data-page="home"] .nav .flag svg{opacity:1}
+html.skip-intro{background:var(--noapte)}
+html.skip-intro .cream,html.skip-intro .logo,html.skip-intro #start,html.skip-intro .skip{display:none}
+body[data-page="home"] .nav.flag-on .flag svg{opacity:1}
+body[data-page="home"] .nav .flag{position:relative;transform-origin:50% 50%;will-change:transform}
+body[data-page="home"] .section-nav{visibility:hidden;pointer-events:none}
+html.opening-section body[data-page="home"] .section-nav,html.closing-section body[data-page="home"] .section-nav{visibility:visible}
+/* Bara de sus (in care a ramas doar steagul) nu acopera coloanele: pe telefon altfel prima banda nu se putea atinge sus. */
+body[data-page="home"] .nav{pointer-events:none}
+body[data-page="home"] .nav .flag{pointer-events:auto}
+/* Intoarcerea dintr-o pagina: titlurile coboara din meniul de sus (home.js, flyFromHeader); cele din coloane apar la final. */
+.closing-section .col-t,.closing-section .cols-flag,.closing-section .nav .flag{visibility:hidden}
+.closing-section .cols{pointer-events:none}
+.closing-section .section-nav nav > a::after{animation:section-separators-in .2s ease-in reverse both}
+/* .direct = starea se schimba pe loc, fara tranzitii (pus o clipa de home.js cand revii pe prima pagina) */
+.hero.direct .hero-txt,.hero.direct .cols,.hero.direct .col,.hero.direct .explore{transition:none!important}
+.opening-section .section-nav nav > a::after{animation:section-separators-in .24s ease-out .25s both}
+.opening-section .cols{animation:section-columns-out .45s ease-out both;pointer-events:none}
+.opening-section .col-t,.opening-section .cols-flag,.opening-section .nav .flag{visibility:hidden}
+@keyframes section-separators-in{from{opacity:0}to{opacity:1}}
+@keyframes section-columns-out{to{opacity:0}}
+
+/* ---------- fonturile pentru textul care se scrie (doar pe prima pagina) ---------- */
+@font-face{font-family:'Titan One';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/titan-one-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Sedgwick Ave Display';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/sedgwick-ave-display-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Press Start 2P';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/press-start-2p-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Fredoka';font-style:normal;font-weight:600;font-display:swap;src:url(../fonts/fredoka-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:'Abril Fatface';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/abril-fatface-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Pacifico';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/pacifico-latin-400-normal.woff2) format('woff2')}
+/* fonturile prin care trece WHO LIVED IT (fisierele -ascii- au doar literele, cifrele si semnele de baza, ca sa fie mici) */
+@font-face{font-family:'Bungee';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/bungee-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Monoton';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/monoton-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Lobster';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/lobster-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Bangers';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/bangers-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Creepster';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/creepster-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'UnifrakturCook';font-style:normal;font-weight:700;font-display:swap;src:url(../fonts/unifrakturcook-ascii-700-normal.woff2) format('woff2')}
+@font-face{font-family:'Righteous';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/righteous-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Black Ops One';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/black-ops-one-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'VT323';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/vt323-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Orbitron';font-style:normal;font-weight:900;font-display:swap;src:url(../fonts/orbitron-ascii-900-normal.woff2) format('woff2')}
+@font-face{font-family:'Alfa Slab One';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/alfa-slab-one-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Rye';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/rye-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Amatic SC';font-style:normal;font-weight:700;font-display:swap;src:url(../fonts/amatic-sc-ascii-700-normal.woff2) format('woff2')}
+@font-face{font-family:'Cinzel Decorative';font-style:normal;font-weight:900;font-display:swap;src:url(../fonts/cinzel-decorative-ascii-900-normal.woff2) format('woff2')}
+@font-face{font-family:'Playfair Display';font-style:italic;font-weight:900;font-display:swap;src:url(../fonts/playfair-display-ascii-900-italic.woff2) format('woff2')}
+@font-face{font-family:'Rubik Mono One';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/rubik-mono-one-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Dancing Script';font-style:normal;font-weight:700;font-display:swap;src:url(../fonts/dancing-script-ascii-700-normal.woff2) format('woff2')}
+@font-face{font-family:'Shrikhand';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/shrikhand-ascii-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Audiowide';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/audiowide-ascii-400-normal.woff2) format('woff2')}
+
+/* ---------- textul care se scrie singur ---------- */
+.seq{position:absolute;inset:0;z-index:7;display:grid;place-items:center;padding:0 5vw;overflow:hidden;visibility:hidden;pointer-events:none;
+  --sfs:clamp(40px, min(8.4vw, 20vh), 170px);--cap:.72}
+.seq.ingust{--sfs:clamp(36px, min(15vw, 11.5vh), 130px)}
+.hero.is-seq .seq{visibility:visible}
+.seq-box{display:grid;justify-items:start;font:800 var(--sfs)/1.04 var(--disp);letter-spacing:.012em;text-transform:uppercase;color:#fff;filter:drop-shadow(0 6px 22px rgba(0,0,0,.5))}
+.seq-box > *{grid-area:1/1}
+.seq-ghost{visibility:hidden}   /* tine locul textului intreg, ca randul sa nu se miste cand se scrie */
+.ln{display:block;height:1.04em;white-space:pre}
+.caret{display:inline-block;width:.075em;height:calc(var(--cap) * 1em);margin-left:.07em;background:var(--galben);border-radius:.02em;animation:clipeste 1s steps(1) infinite}
+.caret.ocupat{animation:none}
+.caret.off{display:none}
+@keyframes clipeste{50%{opacity:0}}
+
+/* literele din STORY: fiecare e un desen (canvas) intr-un loc de latime fixa */
+.mat{position:relative;display:inline-block;width:.78em;height:calc(var(--cap) * 1em);margin:0 .012em;vertical-align:baseline}
+.mat canvas{position:absolute;left:-.3em;bottom:-.42em;width:1.38em;height:calc((var(--cap) + .88) * 1em);opacity:0}
+.mat canvas.on{opacity:1}
+.mat.pop canvas.on{animation:matpop .2s cubic-bezier(.3,1.6,.5,1)}
+.mat.fin canvas.on{transform:rotate(var(--r,0deg))}
+.mat.fin canvas.on[data-m="neon"]{animation:neon 3.2s linear infinite}
+@keyframes matpop{from{transform:scale(.8) rotate(var(--r,0deg))}}
+@keyframes neon{0%,18%,22%,62%,66%,100%{opacity:1}20%,64%{opacity:.55}}
+
+/* WHO LIVED IT: schimba fonturile, apoi bold, italic, subliniat */
+.who{display:inline-block;line-height:1;white-space:pre}
+.who .iubit{display:inline-block;animation:iubit .5s cubic-bezier(.3,1.5,.5,1)}   /* I-ul care devine O: LIVED -> LOVED */
+@keyframes iubit{from{transform:scale(1.7);color:var(--galben)}}
+.seq-line{position:absolute;left:0;top:0;width:0;height:6px;border-radius:3px;background:var(--galben);box-shadow:0 0 18px rgba(255,204,0,.45);opacity:0;transform-origin:0 50%}
+.seq-line.on{opacity:1}
+.hero.is-cols .seq-line.on{opacity:0;transition:opacity .5s ease .1s}
+
+.seq-skip{position:absolute;right:max(20px, env(safe-area-inset-right, 0px));bottom:max(20px, env(safe-area-inset-bottom, 0px));z-index:70;display:flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:999px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font:600 13px var(--font);color:#fff;opacity:0;visibility:hidden;transition:opacity .3s ease,visibility 0s linear .3s}
+.seq-skip svg{width:14px;height:14px}
+.seq-skip:hover{background:rgba(255,255,255,.2)}
+.hero.is-seq .seq-skip{opacity:1;visibility:visible;transition:opacity .4s ease .6s}
+
+/* ---------- coloanele: meniul paginii ----------
+   Sase coloane pe tot ecranul. Cea peste care treci se largeste, celelalte se strang.
+   Steagul UE sta pe linia din mijloc si se misca odata cu ea. */
+.cols{position:absolute;inset:0;z-index:8;display:flex;overflow:hidden;visibility:hidden;transition:visibility 0s linear .55s;
+  --fl:clamp(54px,4.6vw,84px)}
+/* blurul din spatele coloanelor e un strat al fundalului (.blur in site.css), nu al coloanelor: asa se poate estompa lin */
+.hero.is-cols .cols{visibility:visible;transition:none}
+.hero.vine .cols{pointer-events:none}
+.col{position:relative;flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;text-decoration:none;color:#fff;
+  border-left:1px solid var(--divider);
+  background:linear-gradient(180deg,rgba(255,255,255,.085) 0%,rgba(255,255,255,.02) 38%,rgba(255,255,255,.015) 64%,rgba(255,255,255,.06) 100%);
+  transform:translateY(-101%);
+  transition:transform .5s cubic-bezier(.6,0,.8,.3),flex-grow .6s cubic-bezier(.2,.8,.2,1),background-color .4s ease}
+.col:first-child{border-left:0}
+.hero.is-cols .col{transform:none;transition:transform .95s cubic-bezier(.16,1,.3,1) var(--d,0s),flex-grow .6s cubic-bezier(.2,.8,.2,1),background-color .4s ease}
+/* cad pe rand, din mijloc spre margini */
+.col:nth-of-type(3),.col:nth-of-type(4){--d:.02s}
+.col:nth-of-type(2),.col:nth-of-type(5){--d:.11s}
+.col:nth-of-type(1),.col:nth-of-type(6){--d:.2s}
+/* coloanele de langa steag isi trag continutul putin intr-o parte, ca steagul sa nu acopere numele */
+.col:nth-of-type(3){--sh:calc(var(--fl) * -.3)}
+.col:nth-of-type(4){--sh:calc(var(--fl) * .3)}
+.col > span{translate:var(--sh,0) 0}
+.col::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--galben);transform:scaleX(0);transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+.col-n{position:absolute;left:0;right:0;top:clamp(22px,4vh,40px);text-align:center;font:600 12px var(--font);letter-spacing:.2em;color:var(--text-3);transition:color .3s ease}
+.col-t{font:800 clamp(26px,2.9vw,54px)/1 var(--disp);letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;color:transparent;-webkit-text-stroke:1.3px var(--crem);
+  transition:color .35s ease,transform .6s cubic-bezier(.2,.8,.2,1),opacity .35s ease}
+.col-d{position:absolute;left:50%;bottom:clamp(96px,17vh,150px);width:min(250px,60vw);margin-left:calc(min(250px,60vw) / -2);text-align:center;font:400 15px/1.5 var(--font);color:var(--text-2);
+  opacity:0;transform:translateY(12px);transition:opacity .3s ease,transform .5s cubic-bezier(.2,.8,.2,1)}
+.col-a{position:absolute;left:50%;bottom:clamp(30px,6vh,56px);width:44px;height:44px;margin-left:-22px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.25);opacity:.55;transition:background .3s ease,color .3s ease,opacity .3s ease,transform .4s ease}
+.col-a svg{width:16px;height:16px}
+.cols-mid{position:relative;z-index:2;flex:0 0 0;width:0}
+/* Cand apare steagul, linia se opreste la conturul lui si continua dincolo de el. */
+.cols-mid:has(> .cols-flag.on) + .col{
+  --flag-radius:calc(var(--fl) / 2 + var(--flag-rim));
+  border-image:linear-gradient(var(--divider-direction,to bottom),
+    var(--divider) calc(50% - var(--flag-radius)),
+    transparent calc(50% - var(--flag-radius)) calc(50% + var(--flag-radius)),
+    var(--divider) calc(50% + var(--flag-radius))) 1;
+}
+.cols-flag{position:absolute;left:0;top:50%;width:var(--fl);height:var(--fl);margin:calc(var(--fl) / -2) 0 0 calc(var(--fl) / -2);padding:0;border:0;border-radius:50%;cursor:pointer;background:none;opacity:0}
+.cols-flag:not(.on){pointer-events:none}
+.cols-flag.on{opacity:1}
+/* Zona de click dreptunghiulara se misca odata cu steagul. */
+.cols-flag.on::before{content:'';position:absolute;
+  inset:calc(0px - var(--flag-rim) - 24px) calc(0px - var(--flag-rim) - 36px)}
+body[data-page="home"] .nav .flag::after,.cols-flag::after{
+  content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;
+  box-shadow:0 0 0 calc((var(--flag-rim) - 1px) * var(--flag-rim-scale,1)) rgba(11,22,56,.5),
+    0 0 0 calc(var(--flag-rim) * var(--flag-rim-scale,1)) var(--divider)}
+body[data-page="home"] .nav .flag::after{transition:opacity 140ms ease-out}
+body[data-page="home"] .nav .flag.with-rim::after,.cols-flag.on::after{opacity:1}
+.cols-flag svg{width:100%;height:100%}
+.cols-flag:focus-visible{outline-offset:10px;border-radius:50%}
+@media (hover:hover){
+  .col:hover{flex-grow:2.15}
+  .cols:hover .col:not(:hover) .col-t{opacity:.5}
+  .col:hover{background-color:rgba(61,107,255,.16)}
+  .col:hover::after{transform:none}
+  .col:hover .col-n{color:var(--galben)}
+  .col:hover .col-t{color:#fff;transform:scale(1.14)}
+  .col:hover .col-d{opacity:1;transform:none;transition-delay:.12s}
+  .col:hover .col-a{opacity:1;background:var(--crem);color:var(--cerneala);transform:rotate(-45deg)}
+}
+.col:focus-visible{flex-grow:2.15;outline-offset:-4px;background-color:rgba(61,107,255,.16)}
+.col:focus-visible .col-t{color:#fff}
+.col:focus-visible .col-d{opacity:1;transform:none}
+
+/* telefon / ecran ingust: sase benzi una sub alta */
+@media (max-width:860px),(max-aspect-ratio:4/5){
+  .cols{flex-direction:column;--fl:54px;--divider-direction:to right}
+  .col:nth-of-type(n){--sh:0px}
+  .col{flex-direction:row;align-items:center;justify-content:flex-start;gap:14px;padding:0 max(22px, env(safe-area-inset-right, 0px)) 0 max(22px, env(safe-area-inset-left, 0px));border-left:0;border-top:1px solid var(--divider);transform:translateX(-101%)}
+  .col:first-child{border-top:0;padding-top:env(safe-area-inset-top, 0px)}
+  .col-n,.col-d,.col-a{position:static;margin:0}
+  .col-n{flex:none;width:auto;text-align:left}
+  .col-t{font-size:clamp(30px,9.5vw,58px)}
+  .col-d{display:none}
+  .col-a{flex:none;margin-left:auto;width:40px;height:40px;opacity:.8}
+  .col::after{top:0;bottom:0;right:auto;width:3px;height:auto;transform:scaleY(0)}
+  .cols-mid{width:auto;height:0}
+  .cols-flag{left:50%;top:0}
+  .col:active{flex-grow:1.5;background-color:rgba(61,107,255,.16)}
+  .col:active .col-t{color:#fff}
+  .col:active::after{transform:none}
+}
+
+@media (max-width:700px){
+  .hero-txt{padding-bottom:10vh}
+  .mega{--fs:clamp(56px,21vw,140px)}
+}
+@media (prefers-reduced-motion:reduce){
+  .hint.on,.explore svg,.caret,.mat.fin canvas.on[data-m="neon"]{animation:none}
+  .col,.hero.is-cols .col,body[data-page="home"] .nav .flag::after{transition:none}
+}
