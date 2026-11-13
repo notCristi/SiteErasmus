@@ -30,7 +30,7 @@ const FILES = {
 const MOBS = ['ro', 'fr', 'dk'];
 const STAFF_TYPES = ['info', 'day', 'stop'];        // doar profesorii si adminul: inlocuiesc un text care exista deja
 const TYPES = ['media', 'story', 'material', 'result', 'link', ...STAFF_TYPES];
-const TRIES = 8, TRY_WINDOW = 15 * 60 * 1000;   // 8 incercari gresite de pe aceeasi adresa = pauza 15 minute
+const TRIES = 35, TRY_WINDOW = 15 * 60 * 1000;   // 35 incercari gresite pe IP (Wi-Fi scoala) = pauza 15 minute
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS keys (id TEXT PRIMARY KEY, label TEXT NOT NULL, role TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, locked INTEGER NOT NULL DEFAULT 0, max_devices INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL DEFAULT 0, quota_mb INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)`,
@@ -39,7 +39,7 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, type TEXT NOT NULL, mob TEXT NOT NULL, skey TEXT, data TEXT NOT NULL, device_id TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
   `CREATE INDEX IF NOT EXISTS items_live ON items (deleted, created)`,
   `CREATE INDEX IF NOT EXISTS items_device ON items (device_id, deleted)`,
-  `CREATE TABLE IF NOT EXISTS files (key TEXT PRIMARY KEY, device_id TEXT NOT NULL, size INTEGER NOT NULL, cls TEXT NOT NULL, name TEXT, upload_id TEXT, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS files (key TEXT PRIMARY KEY, device_id TEXT NOT NULL, size INTEGER NOT NULL, cls TEXT NOT NULL, name TEXT, upload_id TEXT, item_id TEXT, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS files_device ON files (device_id, created)`,
   `CREATE TABLE IF NOT EXISTS attempts (ip TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS attempts_ip ON attempts (ip, ts)`,
@@ -50,6 +50,8 @@ const MIGRATIONS = [
   `ALTER TABLE keys ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE keys ADD COLUMN quota_mb INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE files ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE files ADD COLUMN item_id TEXT`,
+  `CREATE INDEX IF NOT EXISTS files_orphan ON files (upload_id, item_id, created)`,
 ];
 let schemaReady = null, lastCleanup = 0;
 function ready(env) {
@@ -194,16 +196,22 @@ async function cleanup(env) {
     await dropFiles(env, keys);
     await env.DB.prepare('DELETE FROM items WHERE id = ?').bind(r.id).run();
   }
-  // 3. fisiere finalizate mai vechi de 24h neasociate niciunei postari
+  // 3. fisiere finalizate mai vechi de 24h neasociate niciunei postari (item_id IS NULL)
   const { results: oldFiles } = await env.DB.prepare(
-    'SELECT key FROM files WHERE upload_id IS NULL AND created < ? LIMIT 100').bind(now - ORPHAN_MS).all();
+    'SELECT key FROM files WHERE upload_id IS NULL AND item_id IS NULL AND created < ? LIMIT 100').bind(now - ORPHAN_MS).all();
   if (oldFiles.length) {
-    const { results: allItems } = await env.DB.prepare('SELECT data FROM items').all();
-    const used = new Set();
+    const { results: allItems } = await env.DB.prepare('SELECT id, data FROM items').all();
+    const keyToItem = new Map();
     for (const it of allItems) {
-      try { for (const k of itemKeys(JSON.parse(it.data))) used.add(k); } catch (e) {}
+      try { for (const k of itemKeys(JSON.parse(it.data))) keyToItem.set(k, it.id); } catch (e) {}
     }
-    const orphans = oldFiles.map(f => f.key).filter(k => !used.has(k));
+    const orphans = [], backfill = [];
+    for (const f of oldFiles) {
+      const ownerId = keyToItem.get(f.key);
+      if (ownerId) backfill.push(env.DB.prepare('UPDATE files SET item_id = ? WHERE key = ?').bind(ownerId, f.key));
+      else orphans.push(f.key);
+    }
+    if (backfill.length) await env.DB.batch(backfill);
     if (orphans.length) await dropFiles(env, orphans);
   }
 }
@@ -264,6 +272,8 @@ async function putFile(request, env, dev, url) {
   return json({ key: f.key, size: buf.byteLength });
 }
 async function partsStart(env, dev, url) {
+  const openParts = await env.DB.prepare('SELECT COUNT(*) AS n FROM files WHERE device_id = ? AND upload_id IS NOT NULL').bind(dev.id).first('n');
+  if (openParts >= 3) throw new Bad('too_many_uploads', 429);
   const f = describe(url);
   await quota(env, dev, f.size);
   const up = await env.MEDIA.createMultipartUpload(f.key, r2meta(f));
@@ -337,8 +347,10 @@ async function media(request, env, key) {
   if (!fileKey(key)) return new Response('Not found', { status: 404 });
   if (env.DB) {
     await ready(env);
-    const fRow = await env.DB.prepare('SELECT hidden FROM files WHERE key = ?').bind(key).first();
-    if (fRow && fRow.hidden) return new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
+    const fRow = await env.DB.prepare(
+      'SELECT f.hidden, i.deleted AS item_deleted FROM files f LEFT JOIN items i ON i.id = f.item_id WHERE f.key = ?'
+    ).bind(key).first();
+    if (fRow && (fRow.hidden || fRow.item_deleted === 1)) return new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
   }
   const obj = await env.MEDIA.get(key, { range: request.headers, onlyIf: request.headers });
   if (!obj) return new Response('Not found', { status: 404 });
@@ -348,9 +360,9 @@ async function media(request, env, key) {
   h.set('cache-control', 'public, no-cache');
   h.set('accept-ranges', 'bytes');
   h.set('x-content-type-options', 'nosniff');
-  h.set('content-security-policy', "default-src 'none'; sandbox");
   const type = (FILES[ext(key)] || [])[0] || 'application/octet-stream';
   h.set('content-type', type);
+  if (type !== 'application/pdf') h.set('content-security-policy', "default-src 'none'; sandbox");   // PDF-urile se deschid in vizualizatorul Chrome fara sandbox
   if (key.startsWith('doc/')) {   // PDF-ul se deschide in pagina; PowerPoint si Word se descarca, cu numele lor
     const name = (obj.customMetadata?.name || key.split('/').pop()).replace(/[^\w. ()\-]+/g, '_');
     h.set('content-disposition', `${type === 'application/pdf' ? 'inline' : 'attachment'}; filename="${name}"`);
@@ -444,6 +456,9 @@ async function createItem(request, env, ctx, dev) {
   }
   await env.DB.prepare('INSERT INTO items (id, type, mob, skey, data, device_id, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(id, type, mob, skey, JSON.stringify(data), dev.id, now, now).run();
+  if (keys.length) {
+    await env.DB.batch([...new Set(keys)].map(k => env.DB.prepare('UPDATE files SET item_id = ?, hidden = 0 WHERE key = ?').bind(id, k)));
+  }
   purge(ctx, request);
   return json({ id, type, mob, t: now, ...data });
 }

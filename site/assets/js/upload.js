@@ -84,6 +84,7 @@ const MSG = {
   storage_full: 'The website storage limit is reached. Ask the admin to free space.', key_quota: 'This key reached its storage quota.',
   key_expired: 'This key has expired. Ask your teacher or admin for a new one.', key_locked: 'This key is locked for new devices.',
   device_limit: 'This key reached the maximum number of devices.',
+  too_many_uploads: 'Too many unfinished large uploads. Wait a moment and try again.',
   not_allowed: 'Your key does not allow this.', missing_field: 'Something is missing. Check the fields above.', bad_link: 'The link has to start with https://',
   key_taken: 'This key already exists. Choose another one.', key_too_short: 'A key needs at least 8 characters.', not_found: 'It is no longer there.',
   offline: 'No connection to the server. Check the internet and try again.',
