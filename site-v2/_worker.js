@@ -18,15 +18,22 @@ const TRASH_DAYS_MS = 7 * 24 * 3600 * 1000;                      // postarile as
 const ORPHAN_MS = 24 * 3600 * 1000;                              // fisierele nepublicate/intrerupte se curata dupa 24h
 const FILES = {
   jpg: ['image/jpeg', 'image'], jpeg: ['image/jpeg', 'image'], png: ['image/png', 'image'], webp: ['image/webp', 'image'],
+  gif: ['image/gif', 'image'], avif: ['image/avif', 'image'],
   mp4: ['video/mp4', 'video'], m4v: ['video/mp4', 'video'], mov: ['video/quicktime', 'video'], webm: ['video/webm', 'video'],
   pdf: ['application/pdf', 'doc'],
   pptx: ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'doc'], ppt: ['application/vnd.ms-powerpoint', 'doc'],
   docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'doc'], doc: ['application/msword', 'doc'],
+  ppsx: ['application/vnd.openxmlformats-officedocument.presentationml.slideshow', 'doc'], pps: ['application/vnd.ms-powerpoint', 'doc'],
+  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'doc'], xls: ['application/vnd.ms-excel', 'doc'],
+  odt: ['application/vnd.oasis.opendocument.text', 'doc'], ods: ['application/vnd.oasis.opendocument.spreadsheet', 'doc'],
+  odp: ['application/vnd.oasis.opendocument.presentation', 'doc'], rtf: ['application/rtf', 'doc'],
+  txt: ['text/plain; charset=utf-8', 'doc'], csv: ['text/csv; charset=utf-8', 'doc'], zip: ['application/zip', 'doc'],
+  mp3: ['audio/mpeg', 'doc'], m4a: ['audio/mp4', 'doc'], wav: ['audio/wav', 'doc'], ogg: ['audio/ogg', 'doc'],   // sunetul sta langa documente
 };
 const MOBS = ['ro', 'fr', 'dk'];
 const STAFF_TYPES = ['info', 'day', 'stop'];        // doar profesorii si adminul: inlocuiesc un text care exista deja
 const TYPES = ['media', 'story', 'material', 'result', 'link', ...STAFF_TYPES];
-const TRIES = 35, TRY_WINDOW = 15 * 60 * 1000;   // 35 incercari gresite pe IP (Wi-Fi scoala) = pauza 15 minute
+const TRIES = 1000, TRY_WINDOW = 15 * 60 * 1000;   // 1000 de incercari gresite pe IP (Wi-Fi scoala) = pauza 15 minute
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS keys (id TEXT PRIMARY KEY, label TEXT NOT NULL, role TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, locked INTEGER NOT NULL DEFAULT 0, max_devices INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL DEFAULT 0, quota_mb INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)`,
@@ -323,9 +330,10 @@ async function media(request, env, key) {
   const type = (FILES[ext(key)] || [])[0] || 'application/octet-stream';
   h.set('content-type', type);
   if (type !== 'application/pdf') h.set('content-security-policy', "default-src 'none'; sandbox");   // PDF-urile se deschid in vizualizatorul Chrome fara sandbox
-  if (key.startsWith('doc/')) {   // PDF-ul se deschide in pagina; PowerPoint si Word se descarca, cu numele lor
+  if (key.startsWith('doc/')) {   // PDF-ul, textul simplu si sunetul se deschid in pagina; restul (PowerPoint, Word, Excel, zip) se descarca, cu numele lor
     const name = (obj.customMetadata?.name || key.split('/').pop()).replace(/[^\w. ()\-]+/g, '_');
-    h.set('content-disposition', `${type === 'application/pdf' ? 'inline' : 'attachment'}; filename="${name}"`);
+    const inPage = type === 'application/pdf' || type.startsWith('text/plain') || type.startsWith('audio/');
+    h.set('content-disposition', `${inPage ? 'inline' : 'attachment'}; filename="${name}"`);
   }
   if (!obj.body) return new Response(null, { status: 304, headers: h });
   if (request.headers.has('range') && obj.range) {
@@ -362,11 +370,11 @@ function clean(type, d, old) {
     data = { day: int(d.day, -1, 30, -1), title: str(d.title, 120, { req: true }), excerpt: str(d.excerpt, 300),
       body: str(d.body, 20000, { req: true, lines: true }), author: str(d.author, 60), photos };
   } else if (type === 'material') {
-    const k = kept('key', 'doc'); if (!k) throw new Bad('missing_file');
+    const k = kept('key'); if (!k) throw new Bad('missing_file');   // orice fel de fisier permis: document, poza, video, sunet
     data = { cat: ['a', 'b', 'c', 'd'].includes(d.cat) ? d.cat : 'a', slot: str(d.slot, 160), title: str(d.title, 160), by: str(d.by, 120), key: k };
     if (!data.slot && !data.title) throw new Bad('missing_field');
   } else if (type === 'result') {
-    data = { sec: int(d.sec, 0, 4, 0), text: str(d.text, 4000, { req: true, lines: true }), key: kept('key', 'doc') };
+    data = { sec: int(d.sec, 0, 4, 0), text: str(d.text, 4000, { req: true, lines: true }), key: kept('key') };
   } else if (type === 'link') {
     const url = str(d.url, 500, { req: true });
     let ok = false; try { ok = ['http:', 'https:'].includes(new URL(url).protocol); } catch (e) {}

@@ -12,7 +12,8 @@ if (!root) return;
 const STORE = 'erasmus-upload', MB = 1024 * 1024;
 const LIMIT = { image: 25 * MB, video: 300 * MB, doc: 100 * MB };
 const PHOTO = { max: 2560, q: 0.9, thumb: 640, thumbQ: 0.8 };   // pozele: latura lunga si calitatea, pentru poza mare si pentru cea mica
-const EXT = { image: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif', 'gif', 'bmp'], video: ['mp4', 'm4v', 'mov', 'webm'], doc: ['pdf', 'ppt', 'pptx', 'doc', 'docx'] };
+const EXT = { image: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif', 'gif', 'bmp'], video: ['mp4', 'm4v', 'mov', 'webm'], doc: ['pdf', 'ppt', 'pptx', 'pps', 'ppsx', 'doc', 'docx', 'xls', 'xlsx', 'odt', 'ods', 'odp', 'rtf', 'txt', 'csv', 'zip', 'mp3', 'm4a', 'wav', 'ogg'] };
+const RAW_IMAGE = ['jpg', 'jpeg', 'png', 'webp', 'avif'];   // pozele pe care serverul le primeste si neschimbate
 const SECS = ['Feedback', 'Impressions', 'Conclusions', 'Results and our goals', 'Skills and knowledge'];
 const WHERE = ['School website', 'Facebook / Instagram', 'Press', 'School community'];
 const INFO = [['programme', 'Programme (PDF)'], ['photo', 'Photo of the mobility'], ['text', 'Description'], ['goals', 'Goals'], ['groups', 'Groups']];
@@ -97,7 +98,7 @@ const size = n => {
 };
 const shortDate = ts => new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 const extOf = name => (/\.([a-z0-9]{2,5})$/i.exec(name) || [])[1]?.toLowerCase() || '';
-const kindOf = file => (file.type.startsWith('image/') || EXT.image.includes(extOf(file.name)) ? 'image' : file.type.startsWith('video/') || EXT.video.includes(extOf(file.name)) ? 'video' : EXT.doc.includes(extOf(file.name)) ? 'doc' : '');
+const kindOf = file => (EXT.doc.includes(extOf(file.name)) ? 'doc' : file.type.startsWith('image/') || EXT.image.includes(extOf(file.name)) ? 'image' : file.type.startsWith('video/') || EXT.video.includes(extOf(file.name)) ? 'video' : '');
 const real = t => (t && !/^\s*\[/.test(t) ? t : '');   // textele inca necompletate din data.js ([ ... ]) nu se pun in campuri
 
 /* ---------- sesiunea si serverul ---------- */
@@ -226,7 +227,7 @@ function drop(slot, title, sub, accept, multiple) {
     ${slot === 'story' ? `<input class="up-input up-cap" type="text" maxlength="200" placeholder="Caption (optional)" value="${esc(f.caption)}" data-cap="${i}" aria-label="Caption for ${esc(f.file.name)}">` : ''}
     <button type="button" class="up-x" data-rm="${slot}:${i}" aria-label="Remove ${esc(f.file.name)}">${I.x}</button></li>`).join('')}</ul>` : ''}`;
 }
-const ACCEPT = { photos: 'image/*,video/mp4,video/quicktime,video/webm,.mov,.m4v', image: 'image/*', doc: '.pdf,.ppt,.pptx,.doc,.docx', pdf: '.pdf' };
+const ACCEPT = { photos: 'image/*,video/mp4,video/quicktime,video/webm,.mov,.m4v', image: 'image/*', doc: EXT.doc.map(x => '.' + x).join(',') + ',image/*,video/mp4,video/quicktime,video/webm,.mov,.m4v', pdf: '.pdf' };
 
 function panelMedia() {
   const places = [...mob().stops.filter(s => real(s.title)).map(s => [s.id, s.title]), ['custom', 'Custom place'], ['none', 'No specific place']];
@@ -259,13 +260,13 @@ function panelMaterial() {
     field('Which material?', chips('mat', names.map((n, i) => [i, n]), 'Material'), names.length > 1 ? 'The ones already listed on the page only need their file.' : '') +
     (isNew ? input('matTitle', 'Title', 'Title of the presentation or worksheet') : '') +
     field('Made by', `<div class="up-checks up-checks--2">${MADE_BY.map((n, i) => check('by:' + i, n, '', st.by[i])).join('')}</div>`) +
-    field('File', drop('doc', 'Drop the file here', 'PDF, PowerPoint or Word, up to 100 MB', ACCEPT.doc, false), 'A PDF opens right on the page. PowerPoint and Word are offered as a download.');
+    field('File', drop('doc', 'Drop the file here', 'PDF, PowerPoint, Word, Excel, a photo, a video, a sound or a zip', ACCEPT.doc, false), 'Photos, videos, sounds and PDFs show right on the page. PowerPoint, Word, Excel and zip are offered as a download.');
 }
 function panelResult() {
   return head('Step 3', 'Evaluation &amp; results') +
     field('Which part?', chips('sec', SECS.map((n, i) => [i, n]), 'Part'), 'Every text stays on the page, one under another.') +
     area('resText', 'Text', 'Write the text here', 7, 4000) +
-    field('File (optional)', drop('res', 'Drop a file here', 'A chart, a questionnaire or a report (PDF, PowerPoint, Word)', ACCEPT.doc, false));
+    field('File (optional)', drop('res', 'Drop a file here', 'A chart, a questionnaire or a report (PDF, PowerPoint, Word, Excel, a photo, a video)', ACCEPT.doc, false));
 }
 function panelLink() {
   return head('Step 3', 'Dissemination') +
@@ -330,7 +331,19 @@ class Stop extends Error {}
 const need = (ok, text) => { if (!ok) throw new Stop(text); };
 function progress(text, p) { st.busy = { text, p }; const el = root.querySelector('.up-publish'); if (el) el.innerHTML = publishHTML(); }
 const post = (type, data) => api('POST', '/items', { json: { type, mob: st.mob, data } });
-async function sendDoc(f, label) { let sent = 0; return send(f.file, f.file.name, n => { sent += n; progress(label, sent / f.file.size); }); }
+async function sendDoc(f, label) {
+  // o poza pusa ca material se micsoreaza ca orice poza (asa dispare si locul din datele ei); GIF-ul ramane cum e, ca sa se miste
+  const e = extOf(f.file.name);
+  if (kindOf(f.file) === 'image' && e !== 'gif') {
+    progress(label, 0.3);
+    try { return (await sendPhoto(f.file)).key; }
+    catch (err) {
+      if (err.message !== 'unreadable') throw err;
+      if (!RAW_IMAGE.includes(e)) throw new Stop(`${f.file.name}: this photo format cannot be read here. Save it as JPG first.`);
+    }
+  }
+  let sent = 0; return send(f.file, f.file.name, n => { sent += n; progress(label, sent / f.file.size); });
+}
 async function sendPhoto(file) {
   const { full, thumb } = await shrink(file), base = file.name.replace(/\.[^.]+$/, '');
   return { key: await send(full.blob, `${base}.${full.ext}`), thumb: await send(thumb.blob, `${base}-small.${thumb.ext}`), w: full.w, h: full.h };
@@ -898,7 +911,7 @@ function gate(note = '') {
 
 /* ---------- ce se intampla la click, la scris si la fisiere (formularul din stanga) ---------- */
 function addFiles(slot, fileList) {
-  const want = { media: ['image', 'video'], story: ['image'], doc: ['doc'], res: ['doc'], info: st.info === 'photo' ? ['image'] : ['doc'] }[slot];
+  const want = { media: ['image', 'video'], story: ['image'], doc: ['doc', 'image', 'video'], res: ['doc', 'image', 'video'], info: st.info === 'photo' ? ['image'] : ['doc'] }[slot];
   const multiple = slot === 'media' || slot === 'story', bad = [];
   for (const file of fileList) {
     const kind = kindOf(file);

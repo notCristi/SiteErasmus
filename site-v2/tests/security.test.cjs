@@ -150,7 +150,7 @@ test('schema migrates cleanly from older keys and files tables', async () => {
   for (const col of ['hidden', 'item_id']) assert.ok(fileCols.includes(col));
 });
 
-test('school Wi-Fi per-IP rate limit allows 35 tries and has no global lockout', async () => {
+test('school Wi-Fi per-IP rate limit allows 1000 tries and has no global lockout', async () => {
   const worker = await loadWorker();
   const { env, req } = makeHarness(worker);
 
@@ -162,8 +162,8 @@ test('school Wi-Fi per-IP rate limit allows 35 tries and has no global lockout',
   const okAfterTypos = await req('/api/login', { method: 'POST', ip: '192.168.1.50', json: { key: env.ADMIN_KEY, name: 'Admin' } });
   assert.equal(okAfterTypos.status, 200);
 
-  // 35 wrong tries on one attacker IP blocks that IP at 36th, while clean Admin IP is unaffected
-  for (let i = 0; i < 35; i++) {
+  // 1000 wrong tries on one attacker IP block that IP at the 1001st, while clean Admin IP is unaffected
+  for (let i = 0; i < 1000; i++) {
     const r = await req('/api/login', { method: 'POST', ip: '9.9.9.9', json: { key: 'bad-' + i, name: 'Bot' } });
     assert.equal(r.status, 401);
   }
@@ -258,6 +258,24 @@ test('file types by extension, PDF viewer headers, /media/* caching, Trash 404 b
   assert.equal((await req('/media/' + pngKey)).status, 404);
   assert.equal((await req(`/api/items/${item.id}/restore`, { method: 'POST', token: admTok })).status, 200);
   assert.equal((await req('/media/' + pngKey)).status, 200);
+
+  // More file types: spreadsheets, text, zip, sound and GIF are accepted; a material or a result can be any allowed file
+  const up = async name => { const r = await req(`/api/files?name=${name}&size=4`, { method: 'POST', token: admTok, body: new Uint8Array([1, 2, 3, 4]) }); assert.equal(r.status, 200, name); return (await r.json()).key; };
+  for (const name of ['t.xlsx', 't.xls', 't.ppsx', 't.odt', 't.ods', 't.odp', 't.rtf', 't.csv', 't.zip', 't.gif', 't.avif', 't.m4a', 't.wav', 't.ogg']) await up(name);
+  for (const name of ['x.html', 'x.js', 'x.exe', 'x.svg']) assert.equal((await req(`/api/files?name=${name}&size=4`, { method: 'POST', token: admTok, body: new Uint8Array([1, 2, 3, 4]) })).status, 400, name);
+  const xlsxRes = await req('/media/' + await up('table.xlsx'));
+  assert.match(xlsxRes.headers.get('content-disposition'), /^attachment; filename="table.xlsx"/);
+  const mp3Res = await req('/media/' + await up('song.mp3'));
+  assert.equal(mp3Res.headers.get('content-type'), 'audio/mpeg');
+  assert.match(mp3Res.headers.get('content-disposition'), /^inline;/);
+  const txtRes = await req('/media/' + await up('notes.txt'));
+  assert.equal(txtRes.headers.get('content-type'), 'text/plain; charset=utf-8');
+  assert.equal(txtRes.headers.get('content-security-policy'), "default-src 'none'; sandbox");
+  for (const name of ['clip.mp4', 'poster.webp', 'song2.mp3']) {
+    const r = await req('/api/items', { method: 'POST', token: admTok, json: { type: 'material', mob: 'ro', data: { cat: 'a', title: name, key: await up(name) } } });
+    assert.equal(r.status, 200, name);
+  }
+  assert.equal((await req('/api/items', { method: 'POST', token: admTok, json: { type: 'result', mob: 'ro', data: { sec: 0, text: 'Chart', key: await up('chart.png') } } })).status, 200);
 
   // No cap on unfinished multipart uploads: a dropped connection never locks the device out
   for (let i = 0; i < 6; i++) {

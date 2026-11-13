@@ -428,3 +428,10 @@ select.up-input option{color:#10204A;background:#fff}
 .res-list{display:flex;flex-direction:column;gap:14px}
 .res-entry{display:flex;flex-direction:column;gap:8px;white-space:pre-line}
 .res-entry + .res-entry{padding-top:14px;border-top:1px solid var(--linie)}
+/* fisierele urcate ca material sau rezultat: poza si video-ul se vad direct in card, sunetul se asculta */
+.file-prev{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;background:rgba(0,0,0,.35)}
+video.file-prev{object-fit:contain}
+.file-audio{display:block;width:100%;height:40px}
+.file-link{display:block}
+.res-entry .file-prev{max-width:520px}
+.mat--play{cursor:default}

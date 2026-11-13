@@ -392,7 +392,26 @@ const capRubrica = (m, id, extra = '') => {
   const i = RUBRICI.findIndex(x => x[0] === id);
   return `<div class="hub-head"><span class="eyebrow">Mobility ${m.n} · ${esc(m.city)} · ${i + 1} of 5</span><h2 class="h2">${esc(RUBRICI[i][2])}</h2>${extra}</div>`;
 };
-const tipFisier = f => ({ pdf: 'PDF', ppt: 'Presentation', pptx: 'Presentation', doc: 'Document', docx: 'Document', jpg: 'Image', jpeg: 'Image', png: 'Image', mp4: 'Video' }[(f.split('.').pop() || '').toLowerCase()] || 'File');
+const extFisier = f => (f.split(/[?#]/)[0].split('.').pop() || '').toLowerCase();
+const TIPURI = { PDF: ['pdf'], Presentation: ['ppt', 'pptx', 'pps', 'ppsx', 'odp'], Document: ['doc', 'docx', 'odt', 'rtf'], Spreadsheet: ['xls', 'xlsx', 'ods', 'csv'],
+  Text: ['txt'], Archive: ['zip'], Image: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'], Video: ['mp4', 'm4v', 'mov', 'webm'], Audio: ['mp3', 'm4a', 'wav', 'ogg'] };
+const tipFisier = f => Object.keys(TIPURI).find(t => TIPURI[t].includes(extFisier(f))) || 'File';
+// cum se arata un fisier in pagina: poza si video-ul se vad, sunetul se asculta, PDF-ul si textul se deschid, restul se descarca
+const felFisier = f => ({ Image: 'image', Video: 'video', Audio: 'audio', PDF: 'open', Text: 'open' }[tipFisier(f)] || 'download');
+const previewFisier = (f, alt) => {
+  const fel = felFisier(f);
+  if (fel === 'image') return `<img class="file-prev" src="${esc(f)}" alt="${esc(alt || '')}" loading="lazy" decoding="async">`;
+  if (fel === 'video') return `<video class="file-prev" src="${esc(f)}" controls playsinline preload="metadata"></video>`;
+  if (fel === 'audio') return `<audio class="file-audio" src="${esc(f)}" controls preload="none"></audio>`;
+  return '';
+};
+const linkFisier = (f, open, down) => {
+  const fel = felFisier(f);
+  if (fel === 'video' || fel === 'audio') return '';
+  return fel === 'download'
+    ? `<a class="link-arrow" href="${esc(f)}" download>${down} ${I.ext}</a>`
+    : `<a class="link-arrow" href="${esc(f)}" target="_blank" rel="noopener">${open}<span class="sr"> (opens in a new tab)</span> ${I.ext}</a>`;
+};
 const PANOURI = {
   about(m) {
     const a = m.about;
@@ -428,9 +447,12 @@ const PANOURI = {
         <div class="mat-head"><span class="mat-letter" aria-hidden="true">${c.id.toUpperCase()}</span><div><h3 class="h3">${esc(c.name)}</h3><p class="muted">${esc(c.text)}</p></div></div>
         <div class="grid mat-list">${items.map(x => {
           const inner = `<span class="tag b">${x.file ? tipFisier(x.file) : 'Coming soon'}</span><b>${tx(x.title)}</b>${x.by ? `<span class="small">${tx(x.by)}</span>` : ''}`;
-          return x.file
-            ? `<a class="glass card mat pop" style="--i:${k++}" href="${esc(x.file)}" target="_blank" rel="noopener">${inner}<span class="link-arrow">Open<span class="sr"> (opens in a new tab)</span> ${I.ext}</span></a>`
-            : `<div class="glass card mat pop" style="--i:${k++}">${inner}</div>`;
+          if (!x.file) return `<div class="glass card mat pop" style="--i:${k++}">${inner}</div>`;
+          const fel = felFisier(x.file), prev = previewFisier(x.file, x.title);
+          if (fel === 'video' || fel === 'audio') return `<div class="glass card mat mat--play pop" style="--i:${k++}">${prev}${inner}</div>`;   // se reda direct in card
+          return fel === 'download'
+            ? `<a class="glass card mat pop" style="--i:${k++}" href="${esc(x.file)}" download>${inner}<span class="link-arrow">Download ${I.ext}</span></a>`
+            : `<a class="glass card mat pop" style="--i:${k++}" href="${esc(x.file)}" target="_blank" rel="noopener">${prev}${inner}<span class="link-arrow">Open<span class="sr"> (opens in a new tab)</span> ${I.ext}</span></a>`;
         }).join('') || '<p class="glass entries-empty">Nothing here yet.</p>'}</div>
       </section>`;
       }).join('');
@@ -439,7 +461,7 @@ const PANOURI = {
     return capRubrica(m, 'results', '<p class="muted">What students and teachers thought about the mobility, and what we take from it.</p>') +
       `<div class="grid hub-grid">${m.results.map((r, i) => `<div class="glass card pop" style="--i:${i}"><h3 class="h3">${tx(r.title)}</h3>${
         // textele urcate prin UPLOAD stau unul sub altul; pana vine primul, ramane textul din data.js
-        r.entries?.length ? `<div class="res-list">${r.entries.map(e => `<div class="res-entry"><p class="muted">${tx(e.text)}</p>${e.file ? `<a class="link-arrow" href="${esc(e.file)}" target="_blank" rel="noopener">Open the file<span class="sr"> (opens in a new tab)</span> ${I.ext}</a>` : ''}</div>`).join('')}</div>`
+        r.entries?.length ? `<div class="res-list">${r.entries.map(e => `<div class="res-entry"><p class="muted">${tx(e.text)}</p>${e.file ? (felFisier(e.file) === 'image' ? `<a class="file-link" href="${esc(e.file)}" target="_blank" rel="noopener">${previewFisier(e.file, 'Attached image')}<span class="sr"> (opens in a new tab)</span></a>` : previewFisier(e.file)) + linkFisier(e.file, felFisier(e.file) === 'image' ? 'Open the image' : 'Open the file', `Download the file (${tipFisier(e.file)})`) : ''}</div>`).join('')}</div>`
           : `<p class="muted">${tx(r.text)}</p>`}</div>`).join('')}</div>`;
   },
   dissemination(m) {
