@@ -35,6 +35,10 @@ continutul paginilor e tinut si intr-o copie, `assets/js/page-templates.js`, din
 
 Ce schimbi in `assets/js/data.js` nu are nevoie de comanda asta.
 
+## Pe telefon (iPhone)
+- Zona de sub ceas (sus) si cea de sub bara cu adresa (jos) nu sunt ale paginii: Safari le umple singur cu o singura culoare, aceeasi sus si jos: cea a lui `<html>`. Pe iPhone am pus negru curat, ca zona de sus sa se continue cu Dynamic Island (pe alte telefoane si pe calculator ramane albastrul inchis). Un fundal fix (video-ul nostru) nu are voie sa intre in ele; doar continutul care se deruleaza trece pe sub bara de jos. Ca sa nu ramana o dunga cu margine dreapta, fundalul se topeste sus si jos in culoarea aceea. Stratul se numeste `.edges` si e in `assets/css/site.css` (`--edge-top` si `--edge-bottom` = cat de inalta e trecerea). Apare doar pe iPhone / iPad. Culoarea se schimba in trei locuri, care trebuie sa fie la fel: `--bar` si `--edge` in `site.css` si `SITE_BAR` sus in `assets/js/navigation.js`.
+- Telefonul opreste video-ul de fundal cand iesi din browser, schimbi tab-ul sau blochezi ecranul. La intoarcere il reporneste `wake()` din `assets/js/background-video.js`. In modul de economisire a bateriei, iPhone-ul nu lasa video-ul sa porneasca singur: porneste la prima atingere a ecranului.
+
 ## Muzica de la intro
 Piesa e `assets/audio/music.mp3`. E deja mixata: incepe incet, creste 3 secunde si la secunda 3,05 intra tare.
 Porneste in timpul sunetului de la logo (la secunda 2,30 a animatiei), asa ca intrarea tare cade exact cand se termina logoul. Canta peste ERASMUS+ si peste textul care se scrie, iar cand apar coloanele se stinge lin. Dupa aceea site-ul e fara muzica.
@@ -66,7 +70,7 @@ E o harta adevarata, cu strazi si orase, pe care se poate da zoom.
 - Click pe un pin sau pe cardul unui loc: harta se duce la locul acela. Butonul cu patru colturi (stanga sus) arata din nou toata calatoria.
 - Locurile foarte apropiate (cele din centrul Brasovului) apar ca un singur pin, de exemplu „1–3”. Click pe el apropie harta pana se despart.
 - Liniile galbene sunt cate una pentru fiecare zi: pleaca de la scoala si trec prin locurile zilei. Leaga doar locurile, nu urmeaza soseaua. Cand alegi un loc, ramane aprinsa linia zilei lui.
-- Pe telefon harta nu se trage cu un deget (altfel n-ai mai putea derula pagina); se foloseste cu pinii, butoanele si doua degete.
+- Pe telefon harta se trage cu un deget si se mareste cu doua degete (sau cu butoanele + si -). Pagina se deruleaza atingand in afara hartii.
 - Biblioteca hartii (Leaflet) e pe site, in `assets/vendor/leaflet`. Imaginile hartii vin de pe internet (OpenStreetMap); de aceea sursa e scrisa in coltul hartii si in pagina Legal. Adresa lor e `TILES`, sus in sectiunea hartii din `assets/js/journey.js`.
 - Fara internet, sau cand pagina e deschisa cu dublu click, harta apare fara imagini (doar pini, trasee si numele locurilor). Daca nici biblioteca nu se incarca, apare harta simpla, desenata de noi.
 - Culoarea hartii: `--map-filter` din `assets/css/pages.css`.

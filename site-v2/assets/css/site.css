@@ -34,10 +34,11 @@
   --nav-h:60px; --nav-top:max(16px, calc(env(safe-area-inset-top, 0px) + 8px));
   --font:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;
   --disp:'Big Shoulders Display',Impact,'Arial Narrow',sans-serif;
+  --bar:var(--noapte);   /* culoarea barelor telefonului; pe iPhone e negru (vezi .edges mai jos) */
   color-scheme:dark;
 }
 *,*::before,*::after{box-sizing:border-box}
-html{background:var(--noapte);-webkit-text-size-adjust:100%;scroll-padding-top:110px;scrollbar-width:none}
+html{background:var(--bar);-webkit-text-size-adjust:100%;scroll-padding-top:110px;scrollbar-width:none}
 /* Ascunde bara paginii, pastrand derularea cu mouse-ul, tastatura si atingerea. */
 html::-webkit-scrollbar{display:none}
 body{margin:0;min-height:100vh;min-height:100svh;font:400 16px/1.6 var(--font);color:var(--text);background:transparent;-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -74,6 +75,27 @@ html{-webkit-tap-highlight-color:transparent}
 .blur{position:absolute;inset:0;z-index:3;opacity:0;transition:opacity var(--bg-fade) linear;background:rgba(9,17,46,.3);
   -webkit-backdrop-filter:blur(14px) saturate(150%);backdrop-filter:blur(14px) saturate(150%)}
 .bg.is-cols > .blur{opacity:1}   /* .is-cols il pune home.js cand sunt coloanele pe ecran */
+/* iPhone (Safari si celelalte browsere de pe iOS): zona de sub ceas si cea de sub bara cu adresa nu sunt ale paginii.
+   Telefonul le umple singur cu o singura culoare, aceeasi sus si jos: culoarea lui <html> (--bar), iar un fundal fix
+   (video, imagine) nu are voie sa intre in ele. Pe iPhone culoarea e negru curat, ca zona de sus sa se continue cu
+   Dynamic Island si cu marginea telefonului. Ca sa nu se vada o dunga cu margine dreapta, fundalul se topeste sus si jos
+   exact in culoarea aceea (stratul .edges). Cat de inalta e trecerea: --edge-top si --edge-bottom.
+   Pe alte telefoane si pe calculator nimic din toate astea nu exista.
+   Alta culoare: schimba --bar si --edge aici si SITE_BAR in assets/js/navigation.js (trebuie sa fie aceeasi peste tot). */
+.edges{display:none}
+@supports (-webkit-touch-callout:none){
+  :root{--bar:#000}
+  /* Safari se poate uita si la culoarea de fundal a elementelor fixe lipite de margini: le dam aceeasi culoare.
+     Ce se vede ramane la fel, pentru ca albastrul e pus deasupra, ca imagine. */
+  .bg{background-color:#000}
+  .fundal{background:linear-gradient(var(--noapte),var(--noapte)) #000}
+  .edges{display:block;position:absolute;inset:0;z-index:4;pointer-events:none;--edge-top:120px;--edge-bottom:150px;--edge:0,0,0;
+    background:
+      linear-gradient(180deg,rgb(var(--edge)) 0,rgba(var(--edge),.82) 16%,rgba(var(--edge),.5) 42%,rgba(var(--edge),.18) 72%,rgba(var(--edge),0) 100%) top/100% var(--edge-top) no-repeat,
+      linear-gradient(0deg,rgb(var(--edge)) 0,rgba(var(--edge),.82) 16%,rgba(var(--edge),.5) 42%,rgba(var(--edge),.18) 72%,rgba(var(--edge),0) 100%) bottom/100% var(--edge-bottom) no-repeat}
+  /* meniul de sus, cand pagina e derulata, porneste tot din negru */
+  header.section-nav::before{background:linear-gradient(180deg,rgba(0,0,0,.96) 0%,rgba(4,9,24,.84) 58%,rgba(7,14,38,0) 100%)}
+}
 /* cele doua imbracaminti. plus-lighter le aduna, deci cat una scade si cealalta creste, suma ramane mereu o trecere dreapta intre ele */
 .looks{position:absolute;inset:0;z-index:3;isolation:isolate}
 .look-home,.look-page,.look-home > *{position:absolute;inset:0}
@@ -178,7 +200,7 @@ html.sheet-open,html.sheet-open body{overflow:hidden}
 .section-nav{position:fixed;inset:0 0 auto;z-index:50;padding:var(--nav-top) var(--pad) 10px}
 /* Cand pagina e derulata, meniul primeste un fundal care se stinge in jos, ca textul de dedesubt sa nu se amestece cu el. */
 .section-nav::before{content:'';position:absolute;inset:0 0 -22px;z-index:-1;pointer-events:none;opacity:0;transition:opacity .3s ease;
-  background:linear-gradient(180deg,rgba(7,14,38,.94) 0%,rgba(7,14,38,.82) 58%,rgba(7,14,38,0) 100%);
+  background:linear-gradient(180deg,rgba(11,22,56,.96) 0%,rgba(9,18,47,.84) 58%,rgba(7,14,38,0) 100%);
   -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
   -webkit-mask-image:linear-gradient(180deg,#000 62%,transparent);mask-image:linear-gradient(180deg,#000 62%,transparent)}
 html.scrolled .section-nav::before{opacity:1}
@@ -219,6 +241,9 @@ main{display:block}
 .page-title{display:block;margin-top:.5em;font-size:clamp(64px,13vw,168px);line-height:.92;transform:scaleY(1.45);transform-origin:0 100%}
 .page-head .lead{max-width:640px;margin-top:clamp(18px,3vw,30px);font-size:clamp(17px,1.6vw,20px);line-height:1.55;color:var(--text-2)}
 .page-head{padding-bottom:clamp(30px,5vw,56px)}
+/* telefon: titlul ramane pe un singur rand ("THREE SCHOOLS", "THE JOURNEY"). Pe doua randuri urca peste randul Home > ... de deasupra,
+   pentru ca literele sunt intinse in sus (scaleY). 14.6vw = cel mai lung titlu incape pe orice telefon, de la 320px in sus. */
+@media (max-width:480px){.page-title{font-size:clamp(44px,14.6vw,64px)}}
 
 .eyebrow{display:inline-flex;align-items:center;gap:10px;font:600 12px var(--font);letter-spacing:.2em;text-transform:uppercase;color:var(--text-3)}
 .eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;border:1.5px solid var(--galben)}
@@ -248,7 +273,7 @@ a.card:hover .arrow{background:var(--crem);color:var(--cerneala);transform:rotat
 .tag.b{background:rgba(61,107,255,.22);color:#C9D6FF}
 
 /* filtre / taburi (sticla) */
-.seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:5px;border-radius:999px}
+.seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:5px;border-radius:28px}   /* pe un rand arata tot ca o pastila; pe doua randuri (telefon ingust) ramane un dreptunghi rotunjit, nu un oval */
 .seg button{height:38px;padding:0 16px;border:0;border-radius:999px;background:transparent;cursor:pointer;font:600 14px var(--font);color:rgba(236,240,250,.8);transition:background .2s ease,color .2s ease,scale .3s var(--spring)}
 .seg button:hover{color:#fff;background:rgba(255,255,255,.07)}
 .seg button[aria-pressed="true"],.seg button[aria-selected="true"]{color:#fff;background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.08));box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 14px -6px rgba(0,0,0,.5)}
@@ -292,7 +317,7 @@ a.card:hover .arrow{background:var(--crem);color:var(--cerneala);transform:rotat
 .lb .prev{left:20px;top:50%;margin-top:-24px}
 .lb .next{right:20px;top:50%;margin-top:-24px}
 .lb .count{position:absolute;left:24px;top:max(32px, calc(env(safe-area-inset-top, 0px) + 12px));font:600 13px var(--font);letter-spacing:.1em;color:var(--text-3)}
-@media (max-width:700px){.lb .prev,.lb .next{top:auto;bottom:max(18px, env(safe-area-inset-bottom, 0px));margin:0}.lb-cap{bottom:84px;max-width:calc(100% - 32px)}.lb-stage{height:70vh}}
+@media (max-width:700px){.lb .prev,.lb .next{top:auto;bottom:max(18px, env(safe-area-inset-bottom, 0px));margin:0}.lb-cap{left:16px;right:16px;bottom:84px;width:fit-content;max-width:none;margin:0 auto;transform:none;border-radius:22px}.lb-stage{height:70vh}}
 
 /* ---------- subsol ---------- */
 .foot{position:relative;margin-top:clamp(40px,8vw,100px);padding:0 0 max(28px, env(safe-area-inset-bottom, 0px))}

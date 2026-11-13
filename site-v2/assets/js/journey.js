@@ -260,8 +260,9 @@ function hartaReala() {
   const L = window.L, box = $('map');
   if (!LM) {
     box.innerHTML = '';
-    // pe telefon harta nu se trage cu un deget (altfel n-ai mai putea derula pagina): se foloseste cu pinii, butoanele si doua degete
-    const map = L.map(box, { zoomControl: false, scrollWheelZoom: false, zoomSnap: 0.25, minZoom: 5, maxZoom: 18, dragging: !L.Browser.mobile });
+    // pe telefon harta se trage cu un deget si se mareste cu doua, ca in orice aplicatie de harti.
+    // Pagina se deruleaza atingand in afara hartii (harta nu ocupa tot ecranul, vezi inaltimea .map-card din pages.css).
+    const map = L.map(box, { zoomControl: false, scrollWheelZoom: false, zoomSnap: 0.25, minZoom: 5, maxZoom: 18 });
     map.attributionControl.setPrefix(false);
     // Deschis cu dublu click (file://), OpenStreetMap refuza imaginile: cere ca pagina sa vina de la un site.
     // Atunci harta ramane fara imagini, doar cu numele locurilor, traseele si pinii. Cu porneste-site.bat sau pe internet apar si imaginile.

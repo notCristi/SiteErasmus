@@ -1,6 +1,9 @@
 /* Keep the video, menu and page controllers in one document, including on file://. */
 (() => {
 const html = document.documentElement;
+// Culoarea zonelor pe care telefonul le deseneaza singur (sub ceas si sub bara cu adresa): negru pe iPhone, ca sa se
+// continue cu marginea telefonului si cu Dynamic Island; albastrul site-ului in rest. Aceeasi culoare e si in site.css (--bar).
+window.SITE_BAR = window.CSS?.supports?.('-webkit-touch-callout', 'none') ? '#000000' : '#0B1638';
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const entryURL = new URL(location.href);
 const directory = new URL('.', document.baseURI);
@@ -44,8 +47,8 @@ function syncShell(page) {
   document.querySelector('link[href="assets/css/home.css"]').media = page === 'home' ? 'all' : 'not all';
   html.classList.remove('lock', 'opening-section', 'sheet-open');
   if (page !== 'home') {
-    html.style.backgroundColor = '#0B1638';
-    document.querySelector('meta[name="theme-color"]').content = '#0B1638';
+    html.style.backgroundColor = window.SITE_BAR;
+    document.querySelector('meta[name="theme-color"]').content = window.SITE_BAR;
   }
   document.getElementById('section-nav').inert = page === 'home';
   // On the way back to Home the current label stays marked: HomeController flies the labels down, then clears it.

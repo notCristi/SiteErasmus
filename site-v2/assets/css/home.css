@@ -63,7 +63,7 @@ body[data-page="home"] .nav-in{display:flex;justify-content:center}
 html:not(.skip-intro) body[data-page="home"] .nav{visibility:hidden}
 body[data-page="home"] .nav .flag svg{opacity:0}
 html.skip-intro body[data-page="home"] .nav .flag svg{opacity:1}
-html.skip-intro{background:var(--noapte)}
+html.skip-intro{background:var(--bar)}
 html.skip-intro .cream,html.skip-intro .logo,html.skip-intro #start,html.skip-intro .skip{display:none}
 body[data-page="home"] .nav.flag-on .flag svg{opacity:1}
 body[data-page="home"] .nav .flag{position:relative;transform-origin:50% 50%;will-change:transform}

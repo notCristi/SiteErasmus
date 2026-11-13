@@ -538,7 +538,7 @@ function render() {
   // In rest le scoatem de tot: altfel browserul le-ar amesteca peste pagina la fiecare cadru, degeaba.
   fx.style.display = glc.style.display = p > 0 && p < 1 ? '' : 'none';
   const nightK = smooth(clamp((pB - 0.35) / 0.65));
-  barColor(nightK > 0.5 ? '#0B1638' : '#FCF9F2');
+  barColor(nightK > 0.5 ? (window.SITE_BAR || '#0B1638') : '#FCF9F2');
   // fundalul se intuneca putin sub text si sub coloane, si de tot spre subsol
   const dimK = faza === 'cols' ? 0.5 + 0.5 * clamp(scrollY / (innerHeight * 0.85)) : faza === 'seq' ? 0.35 : 0;
   dim.style.setProperty('--dim', dimK.toFixed(3));

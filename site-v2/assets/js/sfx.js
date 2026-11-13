@@ -113,7 +113,9 @@ function play(name) {
     osc.start(t); osc.stop(t + s.dur + 0.05);
     pulse(Math.max(360, Math.round((s.dur + 0.08) * 1000) + 120));
   };
-  if (ctx.state === 'suspended') ctx.resume().then(emit, () => {});
+  // 'suspended' = inca nepornit; pe iPhone, dupa ce iesi din browser si te intorci, starea e 'interrupted'.
+  // In ambele cazuri sunetul trebuie repornit, altfel click-urile raman mute pana la reincarcarea paginii.
+  if (ctx.state !== 'running') ctx.resume().then(emit, () => {});
   else emit();
 }
 

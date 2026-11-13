@@ -149,7 +149,7 @@
   .mob-bar .seg{flex-wrap:nowrap}
   .mob-bar .seg button{padding:0 14px}
   .mob-bar .seg button small{display:none}
-  .map-card{height:440px}
+  .map-card{height:440px;height:min(440px,64svh)}   /* ramane mereu loc pe ecran in afara hartii, ca sa poti derula pagina */
   .map-box{max-width:none}
   .stop-media{grid-template-columns:repeat(3,minmax(0,1fr))}
 }

@@ -12,7 +12,8 @@ if (!background.querySelector('.looks')) {
   const looks = make('looks'), home = make('look-home');
   home.append(...['.shade', '.vig', '.dim'].map(selector => background.querySelector(selector)));
   looks.append(home, make('look-page'));
-  background.append(looks, make('blur'));
+  // .edges: pe iPhone fundalul se topeste, sus si jos, in culoarea barelor din Safari (vezi site.css)
+  background.append(looks, make('blur'), make('edges'));
 }
 background.classList.add('ready');
 if (!document.getElementById('bgv0')) {
@@ -68,6 +69,7 @@ function advance() {
     show(next);
     active = 1 - active;
     clip = (clip + 1) % 8;
+    if (playing && next.paused) next.play().catch(() => {});   // oprit intre timp de telefon (pagina a fost ascunsa)
     setTimeout(() => {
       current.classList.add('off');
       current.pause();
@@ -117,8 +119,27 @@ function remember() {
   try { sessionStorage.setItem(storageKey, JSON.stringify({clip, time: video.currentTime})); } catch (e) {}
 }
 addEventListener('pagehide', remember);
-addEventListener('pageshow', event => {
-  if (event.persisted && playing) vids[active].play().catch(() => {});
+// Telefonul opreste singur videoul cand iesi din browser, schimbi tab-ul sau blochezi ecranul. Site-ul crede in continuare
+// ca videoul merge, deci nimeni nu il mai pornea la intoarcere. wake() il reporneste de cate ori pagina se vede din nou.
+let retries = 0;
+function wake() {
+  if (!playing || !available || document.hidden) return;
+  const video = vids[active];
+  if (video.paused && !video.ended) video.play().catch(() => {});
+}
+document.addEventListener('visibilitychange', wake);
+addEventListener('pageshow', wake);
+addEventListener('focus', wake);
+// In modul de economisire a bateriei, iPhone-ul nu lasa videoul sa porneasca singur: porneste la prima atingere.
+['touchend', 'click', 'keydown'].forEach(type => addEventListener(type, wake, { passive: true }));
+vids.forEach((video, index) => {
+  // Oprit de sistem cat pagina e pe ecran (de exemplu dupa un apel): mai incercam de cateva ori, nu la nesfarsit.
+  video.addEventListener('pause', () => {
+    if (!playing || index !== active || document.hidden || video.ended || retries >= 3) return;
+    retries++;
+    setTimeout(wake, 300);
+  });
+  video.addEventListener('playing', () => { if (index === active) retries = 0; });
 });
 let fadingTimer = 0;
 function setPage(page) {
