@@ -1,6 +1,6 @@
 /* Prima pagina, un singur ecran in patru pasi:
      1. logoul animat
-     2. un scroll: totul se strange in steagul UE, care urca sus; literele "Erasmus+" din logo raman si devin ERASMUS+ din contur
+     2. un scroll: logoul se desface (panglicile se trag in cercul de stele), cercul devine steagul UE si urca sus; literele "Erasmus+" din logo raman si devin ERASMUS+ din contur
      3. inca un scroll: textul care se scrie singur (home-seq.js), o data pe sesiune
      4. coloanele (meniul). La click, titlurile urca in meniul paginii alese.
    Scroll in sus face pasii inapoi. */
@@ -61,116 +61,126 @@ function prepare() {
   const cx = stars.reduce((s, t) => s + t.ax, 0) / stars.length;
   const cy = stars.reduce((s, t) => s + t.ay, 0) / stars.length;
   const ringR = stars.reduce((s, t) => s + Math.hypot(t.ax - cx, t.ay - cy), 0) / stars.length;
-  const els = [], T = 64;
-  const addTiles = (canvas, data, w, h, ox, oy) => {
-    for (let ty = 0; ty < h; ty += T) for (let tx = 0; tx < w; tx += T) {
-      const tw = Math.min(T, w - tx), th = Math.min(T, h - ty);
-      let cov = 0, n = 0;
-      for (let y = ty; y < ty + th; y += 4) for (let x = tx; x < tx + tw; x += 4) { cov += data.data[(y * w + x) * 4 + 3]; n++; }
-      if (cov / n < 4) continue;
-      const sx = Math.max(0, tx - 1), sy = Math.max(0, ty - 1);
-      const sw = Math.min(w, tx + tw + 1) - sx, sh = Math.min(h, ty + th + 1) - sy;
-      els.push({ src: canvas, sx, sy, sw, sh, x: ox + sx, y: oy + sy, ax: ox + tx + tw / 2, ay: oy + ty + th / 2 });
-    }
-  };
   const A = keyCream(img.A, W, H);
-  const comp = document.createElement('canvas'); comp.width = W; comp.height = H;
-  const cx2 = comp.getContext('2d'); cx2.drawImage(A.c, 0, 0); cx2.drawImage(img.B, meta.B[0], meta.B[1]);
-  const glOK = setupGL(comp);
-  if (!glOK) {
-    addTiles(A.c, A.d, W, H, 0, 0);
-    const bc = document.createElement('canvas'); bc.width = img.B.width; bc.height = img.B.height;
-    const bx = bc.getContext('2d', { willReadFrequently: true }); bx.drawImage(img.B, 0, 0);
-    addTiles(bc, bx.getImageData(0, 0, bc.width, bc.height), bc.width, bc.height, meta.B[0], meta.B[1]);
-  }
+  const Bc = document.createElement('canvas'); Bc.width = W; Bc.height = H;
+  Bc.getContext('2d').drawImage(img.B, meta.B[0], meta.B[1]);
+  const glOK = setupGL(A.c, Bc, img.map);
   const tag = keyCream(img.tag, img.tag.width, img.tag.height).c;
-  const srcOf = s => (s.src === 'flags' ? img.flags : s.src === 'tag' ? tag : img.atlas);
-  for (const k of ['head', 'splash', 'tag']) {   // literele "Erasmus+" nu intra in vartej: raman si devin titlul
-    for (const s of S[k]) els.push({ src: srcOf(s), sx: s.sx, sy: s.sy, sw: s.w, sh: s.h, x: s.x, y: s.y, ax: s.ax ?? s.x + s.w / 2, ay: s.ay ?? s.y + s.h / 2 });
+  // siluetele (capetele), stropii si sloganul mic pleaca fiecare pe rand; literele "Erasmus+" raman si devin titlul
+  const els = [];
+  for (const k of ['head', 'splash', 'tag']) {
+    const n = S[k].length, maxI = k === 'tag' ? Math.max(1, ...S[k].map(t => t.i)) : Math.max(1, n - 1);
+    S[k].forEach((t, i) => els.push({ k, src: k === 'tag' ? tag : img.atlas, sx: t.sx, sy: t.sy, sw: t.w, sh: t.h, x: t.x, y: t.y,
+      ax: t.ax ?? t.x + t.w / 2, ay: t.ay ?? t.y + t.h / 2, o: (k === 'tag' ? t.i : k === 'splash' ? n - 1 - i : i) / maxI }));
   }
-  const dmax = Math.max(...[[0, 0], [W, 0], [0, H], [W, H]].map(([x, y]) => Math.hypot(x - cx, y - cy)));
-  for (const e of els) e.d = Math.hypot(e.ax - cx, e.ay - cy);
-  let seed = 7;
-  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (const e of els) { e.start = 0.30 * (1 - e.d / dmax) + 0.04 * rnd(); e.spin = 0.9 + 0.6 * rnd(); e.tilt = (rnd() - 0.5) * 1.2; }
   // aceleasi litere, vopsite crem (pentru cand fundalul devine inchis)
   const crem = document.createElement('canvas'); crem.width = img.atlas.width; crem.height = img.atlas.height;
   const kx = crem.getContext('2d'); kx.drawImage(img.atlas, 0, 0); kx.globalCompositeOperation = 'source-in'; kx.fillStyle = '#FCF9F2'; kx.fillRect(0, 0, crem.width, crem.height);
-  P = { els, stars, cx, cy, ringR, dmax, glOK, atlas: img.atlas, final: img.final, tag, tagSprites: S.tag, letters: S.letter, atlasCrem: crem,
+  P = { els, stars, cx, cy, ringR, glOK, A: A.c, B: Bc, atlas: img.atlas, final: img.final, tag, tagSprites: S.tag, letters: S.letter, atlasCrem: crem,
         starRatio0: (stars.reduce((s, t) => s + t.w, 0) / stars.length) / 2 / ringR };
 }
 
-/* ---------- vartejul (WebGL) ---------- */
+/* ---------- plecarea logoului (WebGL) ----------
+   Nimic nu se invarte. Panglicile se sterg de-a lungul drumului pe care au fost desenate in intro:
+   din mijlocul de jos spre cele doua capete de sus, care ajung chiar la cercul de stele.
+   Cladirile si siluetele coboara inapoi in panglici (aceeasi harta de timp ca in intro, invers). */
 const glc = $('gl');
 let G = null;
-const NX = 64, NY = 43;
-function setupGL(tex) {
-  const gl = glc.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: true });
+// traseul panglicilor, la fel ca LOOP din logo-anim.js
+const TRASEU = { cx: 768, cy: 520, rx: 620, ry: 300, a0: -15 * Math.PI / 180, span: 335 * Math.PI / 180 };
+const MOALE = 0.035, LUMINA = 0.03;   // cat de moale e marginea care sterge; cat de lunga e lumina de pe varf
+function setupGL(texA, texB, texM) {
+  const gl = glc.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: false });
   if (!gl) return false;
   const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
   const pr = gl.createProgram();
-  gl.attachShader(pr, sh(gl.VERTEX_SHADER, `attribute vec2 aPos; attribute vec2 aUV; attribute float aA;
-    uniform vec2 uOff; uniform float uS; uniform vec2 uRes; varying vec2 vUV; varying float vA;
-    void main(){ vec2 p = uOff + aPos * uS; gl_Position = vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0); vUV = aUV; vA = aA; }`));
-  gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, `precision mediump float; uniform sampler2D uT; varying vec2 vUV; varying float vA;
-    void main(){ gl_FragColor = texture2D(uT, vUV) * vA; }`));
+  gl.attachShader(pr, sh(gl.VERTEX_SHADER, `attribute vec2 aUV; uniform vec2 uOff; uniform float uS; uniform vec2 uRes; varying vec2 vUV;
+    void main(){ vec2 p = uOff + aUV * vec2(${W}.0, ${H}.0) * uS; gl_Position = vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0); vUV = aUV; }`));
+  gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, `precision highp float;
+    uniform sampler2D uT; uniform sampler2D uM; uniform float uMode; uniform float uE; uniform float uGlow; uniform vec4 uThr; varying vec2 vUV;
+    void main(){
+      vec4 c = texture2D(uT, vUV);
+      if (uMode < 0.5) {   // panglicile si steagurile
+        vec2 q = (vUV * vec2(${W}.0, ${H}.0) - vec2(${TRASEU.cx}.0, ${TRASEU.cy}.0)) / vec2(${TRASEU.rx}.0, ${TRASEU.ry}.0);
+        float s = mod(${TRASEU.a0.toFixed(5)} - atan(q.x, -q.y), 6.2831853) / ${TRASEU.span.toFixed(5)};
+        if (s > 1.0) s = s - 1.0 < ${((Math.PI * 2 / TRASEU.span - 1) / 2).toFixed(5)} ? 1.0 : 0.0;   // golul de sus, unde stau stelele
+        float d = abs(s - 0.5) * 2.0 - uE;
+        float al = clamp(d / ${MOALE}, 0.0, 1.0);
+        float g = d > 0.0 ? exp(-d / ${LUMINA}) * uGlow : 0.0;
+        gl_FragColor = vec4(mix(c.rgb, vec3(c.a), g), c.a) * al;
+      } else {             // cladirile si corpurile siluetelor
+        vec4 m = texture2D(uM, vUV);
+        float r = floor(m.b * 5.1 + 0.01);
+        float thr = r < 1.5 ? uThr.x : r < 2.5 ? uThr.y : r < 3.5 ? uThr.z : uThr.w;
+        gl_FragColor = c * clamp((thr - m.g) / 0.09, 0.0, 1.0);
+      }
+    }`));
   gl.linkProgram(pr);
   if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return false;
   gl.useProgram(pr);
-  const nv = (NX + 1) * (NY + 1);
-  const base = new Float32Array(nv * 2), uv = new Float32Array(nv * 2);
-  for (let j = 0, i = 0; j <= NY; j++) for (let k = 0; k <= NX; k++, i++) { base[i * 2] = k / NX * W; base[i * 2 + 1] = j / NY * H; uv[i * 2] = k / NX; uv[i * 2 + 1] = j / NY; }
-  const idx = new Uint16Array(NX * NY * 6);
-  for (let j = 0, n = 0; j < NY; j++) for (let k = 0; k < NX; k++) { const a = j * (NX + 1) + k, b = a + 1, c = a + NX + 1, d = c + 1; idx.set([a, b, c, b, d, c], n); n += 6; }
-  const buf = (data, usage) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, usage); return b; };
-  const pos = new Float32Array(nv * 2), alp = new Float32Array(nv);
-  const bPos = buf(pos, gl.DYNAMIC_DRAW), bUV = buf(uv, gl.STATIC_DRAW), bA = buf(alp, gl.DYNAMIC_DRAW);
-  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
-  const attr = (name, b, size) => { const l = gl.getAttribLocation(pr, name); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, gl.FLOAT, false, 0, 0); };
-  attr('aPos', bPos, 2); attr('aUV', bUV, 2); attr('aA', bA, 1);
-  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
+  const l = gl.getAttribLocation(pr, 'aUV'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0);
   gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tex);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+  const tex = (unit, image) => {
+    const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  };
+  tex(0, texA); tex(1, texB); tex(2, texM);
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-  G = { gl, pr, base, pos, alp, bPos, bA, n: idx.length, uOff: gl.getUniformLocation(pr, 'uOff'), uS: gl.getUniformLocation(pr, 'uS'), uRes: gl.getUniformLocation(pr, 'uRes') };
+  const u = n => gl.getUniformLocation(pr, n);
+  G = { gl, uT: u('uT'), uM: u('uM'), uMode: u('uMode'), uE: u('uE'), uGlow: u('uGlow'), uThr: u('uThr'), uOff: u('uOff'), uS: u('uS'), uRes: u('uRes') };
+  gl.uniform1i(G.uM, 2);
   return true;
 }
+// cand pleaca fiecare parte (0 = incepe plecarea, 1 = a ramas doar cercul de stele): [inceput, durata]
+const PLECARE = {
+  slogan:   [0.00, 0.14],   // + pana la 0.10 intarziere, litera cu litera
+  stropi:   [0.02, 0.20],   // + pana la 0.24 intarziere, pe rand
+  capete:   [0.08, 0.20],   // + pana la 0.12
+  corpuri:  [0.20, 0.30],
+  cladiri:  { 1: [0.34, 0.36], 2: [0.34, 0.36], 3: [0.26, 0.36] },   // 1 = Turnul Eiffel, 2 = cladirea daneza, 3 = cea romaneasca
+  panglici: [0.24, 0.76],
+};
+const fereastra = (pA, [t0, d]) => clamp((pA - t0) / d);
+// 1 = se vede tot, 0 = a coborat de tot (pragul din harta de timp)
+const prag = k => 1.1 - 1.2 * inOut(k);
 function drawGL(pA, s, ox, oy, cw, ch) {
   const { gl } = G;
   gl.viewport(0, 0, glc.width, glc.height);
   gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
   if (pA <= 0 || pA >= 1) return;
-  const { base, pos, alp } = G;
-  for (let i = 0, n = alp.length; i < n; i++) {
-    const vx = base[i * 2] - P.cx, vy = base[i * 2 + 1] - P.cy;
-    const dn = Math.hypot(vx, vy) / P.dmax;
-    const q = clamp((pA - 0.30 * (1 - dn)) / 0.62);
-    const ep = q * q, sq = smooth(q);
-    const phi = -(0.9 + 0.5 * dn) * sq * 1.1, cs = Math.cos(phi), sn = Math.sin(phi), kk = 1 - ep;
-    pos[i * 2] = P.cx + (vx * cs - vy * sn) * kk;
-    pos[i * 2 + 1] = P.cy + (vx * sn + vy * cs) * kk;
-    alp[i] = 1 - smooth(clamp((q - 0.7) / 0.3));
-  }
-  gl.bindBuffer(gl.ARRAY_BUFFER, G.bPos); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
-  gl.bindBuffer(gl.ARRAY_BUFFER, G.bA); gl.bufferSubData(gl.ARRAY_BUFFER, 0, alp);
   gl.uniform2f(G.uOff, ox, oy); gl.uniform1f(G.uS, s); gl.uniform2f(G.uRes, cw, ch);
-  gl.drawElements(gl.TRIANGLES, G.n, gl.UNSIGNED_SHORT, 0);
+  const kp = fereastra(pA, PLECARE.panglici);
+  // panglicile
+  gl.uniform1i(G.uT, 0); gl.uniform1f(G.uMode, 0);
+  gl.uniform1f(G.uE, -MOALE + (1 + MOALE) * inOut(kp));
+  gl.uniform1f(G.uGlow, 0.55 * smooth(clamp(kp / 0.08)) * (1 - smooth(clamp((kp - 0.9) / 0.1))));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  // cladirile si corpurile, peste panglici
+  const c = PLECARE.cladiri;
+  gl.uniform1i(G.uT, 1); gl.uniform1f(G.uMode, 1);
+  gl.uniform4f(G.uThr, prag(fereastra(pA, c[1])), prag(fereastra(pA, c[2])), prag(fereastra(pA, c[3])), prag(fereastra(pA, PLECARE.corpuri)));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
 /* ---------- starea paginii ---------- */
 // faza: 'intro' = de la logo pana la ERASMUS+ ; 'hero' = ERASMUS+ pe ecran ; 'seq' = textul se scrie ; 'cols' = coloanele
 let introGata = false, faza = 'intro';
-const DURATA = reduce ? 1600 : 4500;   // ms, de la logo la ERASMUS+
+const DURATA = reduce ? 1600 : 4200;   // ms, de la logo la ERASMUS+
 let curP = 0, tinta = 0, ultim = 0, ruleaza = false, topSince = Infinity;
 function terminaIntro() {
   if (introGata) return;
   introGata = true;
   $('bgv0').preload = 'auto';
   hint.classList.add('on');
+  // logoul sta pe loc si asteapta scroll: acum e momentul pentru pregatirea textului care se scrie (fonturi, litere desenate)
+  if (SEQ && !textVazut) SEQ.pregateste();
   cere();
 }
 function clasa(f) {
@@ -186,11 +196,16 @@ function mergi(dir) {
   if (!introGata || faza === 'seq' || faza === 'cols') return;
   tinta = dir > 0 ? 1 : 0;
   if (tinta === 0 && faza === 'hero') { faza = 'intro'; clasa(''); }
-  if (!ruleaza && curP !== tinta) { ruleaza = true; ultim = performance.now(); requestAnimationFrame(pas); }
+  if (!ruleaza && curP !== tinta) {
+    SEQ?.pauza?.(DURATA + 300);   // cat zboara literele, pregatirea textului sta pe loc, ca sa nu fure cadre
+    ruleaza = true; ultim = 0; requestAnimationFrame(pas);
+  }
 }
 function pas(now) {
   if (!onHome()) { ruleaza = false; return; }
-  const pasP = Math.min(64, now - ultim) / DURATA; ultim = now;
+  const dt = ultim ? Math.min(24, Math.max(4, now - ultim)) : 16.67;
+  ultim = now;
+  const pasP = dt / DURATA;
   const d = tinta - curP;
   if (Math.abs(d) <= pasP) { curP = tinta; ruleaza = false; } else curP += Math.sign(d) * pasP;
   render();
@@ -459,7 +474,7 @@ function star(ctx, x, y, R) {
   for (let i = 1; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r : R; ctx.lineTo(x + rr * Math.cos(a), y + rr * Math.sin(a)); }
   ctx.closePath();
 }
-let dpr = 1;
+let dpr = 1, geom = { w: 0, h: 0, left: 0, top: 0, s: 1, ox: 0, oy: 0, fcx: 0, fcy: 0, fw: 44 };
 // unde sta fiecare litera din ERASMUS+ (dreptunghiul desenului ei, fata de erou). Literele din logo zboara spre locurile astea.
 let tinte = null;
 const mctx = document.createElement('canvas').getContext('2d');
@@ -491,6 +506,16 @@ function resize() {
   fx.width = glc.width = Math.round(r.width * dpr); fx.height = glc.height = Math.round(r.height * dpr);
   const nb = nav.getBoundingClientRect().bottom;
   heroTxt.style.top = Math.round(Math.max(0, nb - (r.top + scrollY)) + 8) + 'px';
+  const lr = logoEl.getBoundingClientRect();
+  const st = steag.style.transform;
+  if (st) { steag.style.transition = 'none'; steag.style.transform = ''; }
+  const fr = slot.getBoundingClientRect();
+  if (st) steag.style.transform = st;
+  geom = {
+    w: r.width, h: r.height, left: r.left, top: r.top,
+    s: lr.width / W, ox: lr.left - r.left, oy: lr.top - r.top,
+    fcx: fr.left - r.left + fr.width / 2, fcy: fr.top - r.top + fr.height / 2, fw: fr.width,
+  };
   masoaraLitere();
   cere();
 }
@@ -499,16 +524,19 @@ function render() {
   pending = false;
   if (!onHome()) return;
   const p = curP;
-  const pA = clamp(p / 0.40), pB = clamp((p - 0.40) / 0.20), pC = clamp((p - 0.60) / 0.28);
+  const pA = clamp(p / 0.36), pB = clamp((p - 0.33) / 0.23), pC = clamp((p - 0.60) / 0.28);
   const gata = p >= 1 && !ruleaza;
 
   logoEl.style.visibility = p > 0 ? 'hidden' : 'visible';
+  // Cele doua canvas-uri de pe tot ecranul (desenul 2D si WebGL) sunt folosite doar cat se desface logoul.
+  // In rest le scoatem de tot: altfel browserul le-ar amesteca peste pagina la fiecare cadru, degeaba.
+  fx.style.display = glc.style.display = p > 0 && p < 1 ? '' : 'none';
   const nightK = smooth(clamp((pB - 0.35) / 0.65));
   barColor(nightK > 0.5 ? '#0B1638' : '#FCF9F2');
   // fundalul se intuneca putin sub text si sub coloane, si de tot spre subsol
   const dimK = faza === 'cols' ? 0.5 + 0.5 * clamp(scrollY / (innerHeight * 0.85)) : faza === 'seq' ? 0.35 : 0;
   dim.style.setProperty('--dim', dimK.toFixed(3));
-  window.backgroundVideo?.play(pB > 0 && dimK < 0.995);
+  window.backgroundVideo?.play((introGata || pB > 0) && dimK < 0.995);
 
   hint.style.opacity = introGata ? 1 - clamp(p / 0.04) : 0;
   hint.style.visibility = introGata && p < 0.04 ? 'visible' : 'hidden';
@@ -522,9 +550,7 @@ function render() {
   motto.style.opacity = mo; motto.style.transform = mo >= 1 ? '' : `translateY(${(1 - mo) * 16}px)`;
 
   // literele: cat timp zboara din logo spre locul lor, <span>-urile din titlu sunt mutate peste ele
-  const sr = hero.getBoundingClientRect();
-  const lr = logoEl.getBoundingClientRect();
-  const s = lr.width / W, ox = lr.left - sr.left, oy = lr.top - sr.top;
+  const { w: sw, h: sh, left: sLeft, top: sTop, s, ox, oy, fcx: slotCx, fcy: slotCy, fw: slotW } = geom;
   const pL = clamp((p - 0.56) / 0.42);
   const zbor = lit.map((sp, i) => {
     const T = tinte && tinte[i], t = P && P.letters[i];
@@ -534,7 +560,7 @@ function render() {
     const R = { x: lerp(S.x, T.x, k), y: lerp(S.y, T.y, k), w: lerp(S.w, T.w, k), h: lerp(S.h, T.h, k) };
     const aD = smooth(clamp((k - 0.12) / 0.5));
     sp.style.opacity = aD;
-    sp.style.transform = aD <= 0 ? '' : `translate(${R.x + R.w / 2 - T.x - T.w / 2}px,${(R.y + R.h / 2 - T.y - T.h / 2) / T.SY}px) scale(${R.w / T.w},${R.h / T.h})`;
+    sp.style.transform = aD <= 0 || k >= 1 ? '' : `translate3d(${R.x + R.w / 2 - T.x - T.w / 2}px,${(R.y + R.h / 2 - T.y - T.h / 2) / T.SY}px,0) scale(${R.w / T.w},${R.h / T.h})`;
     return { t, S, R, a: 1 - smooth(clamp((k - 0.18) / 0.5)) };
   });
 
@@ -554,24 +580,37 @@ function render() {
   const toLogo = () => fctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
   const toScreen = () => fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const rot = (Math.PI / 6) * inOut(clamp((pB - 0.15) / 0.85));
+  // cand capetele panglicilor ajung la stele, cercul "respira" o data
+  const puls = 1 + 0.09 * Math.sin(Math.PI * clamp((p - 0.31) / 0.13));
 
-  // 1. panglicile si cladirile se invart spre stele; literele, siluetele si stropii zboara separat
-  if (G) drawGL(pA, s, ox, oy, sr.width, sr.height);
+  // 1. logoul se desface: panglicile se trag in cercul de stele, cladirile si siluetele coboara in panglici
+  if (G) drawGL(pA, s, ox, oy, sw, sh);
   toLogo();
   if (pA < 1) {
+    if (!G) {   // fara WebGL: se sting simplu
+      fctx.globalAlpha = 1 - smooth(fereastra(pA, PLECARE.panglici)); fctx.drawImage(P.A, 0, 0);
+      fctx.globalAlpha = 1 - smooth(fereastra(pA, [0.2, 0.5])); fctx.drawImage(P.B, 0, 0);
+    }
+    const inBack = q => q * q * (2.7 * q - 1.7);   // se umfla putin, apoi se strange
     for (const e of P.els) {
-      const q = clamp((pA - e.start) / 0.62);
-      if (q >= 1) continue;
-      if (q <= 0) { fctx.globalAlpha = 1; fctx.drawImage(e.src, e.sx, e.sy, e.sw, e.sh, e.x, e.y, e.sw, e.sh); continue; }
-      const ep = q * q, sq = smooth(q);
-      const phi = -e.spin * sq * 1.1;
-      const vx = e.ax - P.cx, vy = e.ay - P.cy, cs = Math.cos(phi), sn = Math.sin(phi), kk = 1 - ep;
+      let al = 1, sc = 1, dx = 0, dy = 0;
+      if (e.k === 'tag') {            // sloganul mic: litera cu litera, in jos
+        const q = fereastra(pA - e.o * 0.10, PLECARE.slogan);
+        al = 1 - smooth(q); dy = 9 * q * q;
+      } else if (e.k === 'splash') {  // stropii se strang la loc, pe rand
+        const q = fereastra(pA - e.o * 0.24, PLECARE.stropi);
+        sc = 1 - inBack(q); al = 1 - clamp((q - 0.75) / 0.25);
+        const vx = 768 - e.ax, vy = 480 - e.ay, len = Math.hypot(vx, vy) || 1;
+        dx = vx / len * 34 * q * q; dy = vy / len * 34 * q * q;
+      } else {                        // capetele siluetelor coboara in corpuri
+        const q = fereastra(pA - e.o * 0.12, PLECARE.capete);
+        sc = 1 - inBack(q); al = 1 - clamp((q - 0.75) / 0.25); dy = 16 * q * q;
+      }
+      if (al <= 0 || sc <= 0.01) continue;
+      fctx.globalAlpha = al;
+      if (sc === 1) { fctx.drawImage(e.src, e.sx, e.sy, e.sw, e.sh, e.x + dx, e.y + dy, e.sw, e.sh); continue; }
       fctx.save();
-      fctx.globalAlpha = 1 - smooth(clamp((q - 0.7) / 0.3));
-      fctx.translate(P.cx + (vx * cs - vy * sn) * kk, P.cy + (vx * sn + vy * cs) * kk);
-      fctx.rotate(phi + e.tilt * sq);
-      const sc = Math.max(0.02, 1 - 0.95 * ep);
-      fctx.scale(sc, sc);
+      fctx.translate(e.ax + dx, e.ay + dy); fctx.scale(sc, sc);
       fctx.drawImage(e.src, e.sx, e.sy, e.sw, e.sh, e.x - e.ax, e.y - e.ay, e.sw, e.sh);
       fctx.restore();
     }
@@ -585,14 +624,13 @@ function render() {
   }
 
   // 2. steagul UE: discul creste, inelul se roteste, apoi urca in meniu
-  const fr = slot.getBoundingClientRect();
   const m = inOut(pC);
   const C0x = ox + P.cx * s, C0y = oy + P.cy * s, R0 = P.ringR * s;
-  const fcx = lerp(C0x, fr.left - sr.left + fr.width / 2, m);
-  const fcy = lerp(C0y, fr.top - sr.top + fr.height / 2, m);
-  const R = lerp(R0, fr.width / 2 / DISC, m);
+  const fcx = lerp(C0x, slotCx, m);
+  const fcy = lerp(C0y, slotCy, m);
+  const R = lerp(R0, slotW / 2 / DISC, m);
   const disc = outCubic(clamp(pB / 0.7)) * DISC;
-  const cx = C0x + sr.left, cy = C0y + sr.top, vw = innerWidth, vh = innerHeight;
+  const cx = C0x + sLeft, cy = C0y + sTop, vw = innerWidth, vh = innerHeight;
   const far = Math.max(Math.hypot(cx, cy), Math.hypot(vw - cx, cy), Math.hypot(cx, vh - cy), Math.hypot(vw - cx, vh - cy));
   const rr = R0 * DISC + nightK * (far + 80);   // pana unde a ajuns "noaptea"
   if (nightK <= 0) { cream.style.display = ''; cream.style.webkitMaskImage = cream.style.maskImage = ''; }
@@ -613,7 +651,7 @@ function render() {
   fctx.globalAlpha = 1;
   if (disc > 0.001) {
     fctx.save();
-    fctx.shadowColor = `rgba(0,0,0,${0.45 * nightK})`;
+    fctx.shadowColor = `rgba(0,0,0,${0.45 * smooth(clamp((nightK - 0.1) / 0.3))})`;   // umbra apare abia dupa ce noaptea a trecut de steag
     fctx.shadowBlur = R * 0.8 * dpr;
     fctx.shadowOffsetY = R * 0.22 * dpr;
     fctx.fillStyle = '#003399';
@@ -627,7 +665,7 @@ function render() {
     const cr = Math.cos(rot), sr2 = Math.sin(rot);
     for (const t of P.stars) {
       const vx = t.ax - P.cx, vy = t.ay - P.cy;
-      const nx = P.cx + vx * cr - vy * sr2, ny = P.cy + vx * sr2 + vy * cr;
+      const nx = P.cx + (vx * cr - vy * sr2) * puls, ny = P.cy + (vx * sr2 + vy * cr) * puls;
       fctx.drawImage(P.atlas, t.sx, t.sy, t.w, t.h, nx - (t.ax - t.x), ny - (t.ay - t.y), t.w, t.h);
     }
     fctx.globalAlpha = 1;
@@ -639,7 +677,7 @@ function render() {
     fctx.globalAlpha = aEU;
     fctx.fillStyle = '#FFCC00';
     fctx.beginPath();
-    for (let i = 0; i < 12; i++) { const a = -Math.PI / 2 + i * Math.PI / 6 + rot; star(fctx, fcx + R * Math.cos(a), fcy + R * Math.sin(a), R * ratio); }
+    for (let i = 0; i < 12; i++) { const a = -Math.PI / 2 + i * Math.PI / 6 + rot; star(fctx, fcx + R * puls * Math.cos(a), fcy + R * puls * Math.sin(a), R * ratio); }
     fctx.fill();
     fctx.globalAlpha = 1;
   }

@@ -41,7 +41,7 @@
 .info .row{display:grid;grid-template-columns:minmax(140px,.4fr) 1fr;gap:20px;padding:18px 0;border-bottom:1px solid var(--linie)}
 .info .row:last-child{border-bottom:0}
 .info dt{font:600 12px/1.9 var(--font);letter-spacing:.16em;text-transform:uppercase;color:var(--text-3)}
-.info dd{margin:0;font-size:17px;color:#fff}
+.info dd{overflow-wrap:anywhere;margin:0;font-size:17px;color:#fff}
 .team{grid-template-columns:repeat(4,minmax(0,1fr))}
 .person{padding:14px 14px 22px;gap:12px}
 .person .ph{aspect-ratio:1;border-radius:18px}
@@ -82,7 +82,7 @@
 .journey{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,1fr);gap:clamp(14px,1.8vw,22px);align-items:start}
 .map-card{position:sticky;top:calc(var(--nav-top) + var(--nav-h) + 16px);height:min(680px,calc(100vh - 140px));height:min(680px,calc(100svh - 140px));overflow:hidden;padding:0}
 .map{position:absolute;inset:0;border-radius:inherit;overflow:hidden;z-index:-1}
-.map svg{width:100%;height:100%;display:block}
+.map > svg{width:100%;height:100%;display:block}
 .map .grid-l{stroke:rgba(255,255,255,.07);stroke-width:1}
 .map .grid-t{fill:rgba(255,255,255,.28);font:500 10px var(--font);letter-spacing:.06em}
 .map .land{fill:rgba(110,155,255,.10);stroke:rgba(150,180,255,.45);stroke-width:1.2;vector-effect:non-scaling-stroke}
@@ -124,7 +124,7 @@
 .stop-foot .seg button{height:30px;padding:0 12px;font-size:12px}
 .stop-foot .count{font-size:13px;color:var(--text-3)}
 .europe-card{padding:0;overflow:hidden;aspect-ratio:1000/760;max-height:520px;width:100%}
-.europe-card svg{width:100%;height:100%}
+.europe-card .eu-svg > svg{width:100%;height:100%}
 .europe-wrap{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:clamp(20px,4vw,60px);align-items:center}
 .city{cursor:pointer}
 .city .halo{fill:rgba(255,204,0,.2);transform-box:fill-box;transform-origin:center;animation:puls 2.4s ease-out infinite}
@@ -196,3 +196,108 @@
 .nf p{font-size:clamp(18px,2vw,22px);color:var(--text-2)}
 .stop-media button{position:relative;overflow:hidden}
 .more-n{position:absolute;inset:0;display:grid;place-items:center;border-radius:12px;background:rgba(7,14,38,.62);font:800 24px var(--disp);color:#fff}
+/* fara animatii in bucla pentru cine a cerut miscare redusa */
+@media (prefers-reduced-motion:reduce){.pin.on .halo,.city .halo{animation:none}}
+
+/* ---------- Journey: cele 5 rubrici ale unei mobilitati ---------- */
+.hub-bar{margin-bottom:clamp(22px,3vw,34px)}
+.hub-bar .seg button{white-space:nowrap}
+/* pe telefon cele cinci taburi stau pe un singur rand care se trage cu degetul */
+@media (max-width:700px){
+  .hub-bar{overflow-x:auto;scrollbar-width:none;margin-inline:calc(var(--pad) * -1);padding:4px var(--pad) 26px;margin-bottom:0}
+  .hub-bar::-webkit-scrollbar{display:none}
+  .hub-bar .seg{flex-wrap:nowrap}
+}
+.hub-head{margin-bottom:clamp(18px,2.6vw,28px)}
+.hub-head .h2{font-size:clamp(32px,4.4vw,54px)}
+.hub-head p{max-width:640px;margin-top:12px}
+.hub-about{margin-bottom:clamp(18px,2.4vw,28px)}
+.hub-about .media{aspect-ratio:4/3;border-radius:var(--r)}
+.hub-about .hub-head{margin-bottom:16px}
+.hub-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.hub-theme{font:700 clamp(22px,2.2vw,28px)/1.1 var(--disp);text-transform:uppercase;letter-spacing:.01em;color:#fff;margin-bottom:12px}
+.hub-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.hub-list{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;color:var(--text-2)}
+.mat-cat{margin-top:clamp(26px,4vw,44px)}
+.mat-head{display:flex;gap:18px;align-items:flex-start;margin-bottom:18px}
+.mat-head p{max-width:640px;margin-top:6px}
+.mat-letter{flex:none;font:800 56px/.8 var(--disp);color:transparent;-webkit-text-stroke:1.4px var(--galben);transform:scaleY(1.2);transform-origin:0 0}
+.mat-list{grid-template-columns:repeat(3,minmax(0,1fr))}
+.mat{padding:20px 22px;gap:10px;align-items:flex-start}
+.mat b{font:800 22px/1.08 var(--disp);text-transform:uppercase;color:#fff}
+.mat p{font-size:15px;color:var(--text-2)}
+.mat .link-arrow{margin-top:auto;padding-top:6px;font-size:14px}
+.mat .link-arrow svg{width:14px;height:14px}
+.days{margin-bottom:clamp(22px,3vw,34px)}
+.days-list{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+/* in cardurile zilelor, data sta mereu sub pastila cu ziua, ca titlurile sa fie aliniate */
+.day .entry-meta{flex-direction:column;align-items:flex-start;gap:6px}
+/* pe ecran lat, toate zilele stau pe un singur rand */
+@media (min-width:1100px){.days-list{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr)}}
+@media (max-width:1000px){.mat-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.mat-list,.hub-grid{grid-template-columns:1fr}.mat-letter{font-size:44px}}
+/* pe telefon, titlul si textul rubricii About vin inaintea pozei */
+@media (max-width:760px){.hub-about > :first-child{order:2}}
+
+/* ---------- Journey: harta reala (Leaflet, vezi journey.js) ---------- */
+/* culoarea hartii: imaginile vin deschise la culoare; sunt intoarse pe inchis si trecute in albastrul site-ului. Mai albastra = saturate mai mare; mai luminoasa = brightness mai mare */
+:root{--map-filter:grayscale(1) invert(1) brightness(1.5) contrast(.85) sepia(1) hue-rotate(185deg) saturate(1.6)}
+.map.leaflet-container{background:#0A1436;font:inherit}
+.map .leaflet-tile-pane,.eu-real .leaflet-tile-pane{filter:var(--map-filter)}
+/* sus si jos harta se intuneca putin, ca eticheta si caseta sa se citeasca bine */
+.map.leaflet-container::after{content:'';position:absolute;inset:0;z-index:450;pointer-events:none;
+  background:linear-gradient(180deg,rgba(7,14,38,.42) 0%,rgba(7,14,38,0) 20%,rgba(7,14,38,0) 68%,rgba(7,14,38,.5) 100%)}
+/* (.map-card in fata: stilul bibliotecii se incarca dupa al nostru si altfel l-ar acoperi) */
+.map-card .map .leaflet-control-attribution,.europe-card .eu-real .leaflet-control-attribution{margin:0;padding:4px 10px;border-radius:10px 0 0 0;background:rgba(7,14,38,.82);color:var(--text-2);font:500 11px/1.4 var(--font)}
+.map-card .map .leaflet-control-attribution a,.europe-card .eu-real .leaflet-control-attribution a{color:#fff;text-decoration:none}
+.map-ctl{position:absolute;left:16px;top:16px;display:flex;flex-direction:column;gap:8px}
+.map-ctl button{width:38px;height:38px;padding:0;border:0;border-radius:50%;cursor:pointer;display:grid;place-items:center;color:#fff}
+.map-ctl svg{width:16px;height:16px}
+.map-ctl button:active{scale:.9}
+/* pinii */
+.mpin-wrap:focus{outline:none}
+.mpin{position:absolute;left:0;top:0;transform:translate(-50%,-50%);min-width:34px;height:34px;padding:0 10px;border-radius:999px;display:grid;place-items:center;white-space:nowrap;cursor:pointer;
+  font:800 16px/1 var(--disp);letter-spacing:.02em;color:#fff;background:rgba(16,32,74,.9);
+  box-shadow:0 0 0 1.5px rgba(255,255,255,.78),0 8px 18px -6px rgba(0,0,0,.7);transition:background .25s ease,color .25s ease,box-shadow .25s ease,scale .3s var(--spring)}
+.mpin.multi{background:rgba(61,107,255,.92)}
+.mpin-wrap:hover .mpin,.mpin-wrap:focus-visible .mpin{box-shadow:0 0 0 2px var(--galben),0 8px 18px -6px rgba(0,0,0,.7)}
+.mpin-wrap:active .mpin{scale:.9}
+.mpin.on{background:var(--galben);color:var(--cerneala);box-shadow:0 0 0 2px #fff,0 8px 20px -6px rgba(0,0,0,.7)}
+.mpin.on::after{content:'';position:absolute;inset:-7px;border-radius:999px;border:2px solid rgba(255,204,0,.65);animation:puls 1.8s ease-out infinite}
+/* pe telefon caseta urca putin, ca sa nu acopere randul cu sursa hartii */
+@media (max-width:700px){.map-card.real .map-box{bottom:32px}}
+@media (prefers-reduced-motion:reduce){.mpin.on::after{animation:none}}
+
+/* harta fara imagini (pagina deschisa cu dublu click): fundal cu grila si numele locurilor din data.js */
+.map-card.no-tiles .map.leaflet-container{background:
+  radial-gradient(70% 60% at 50% 40%,rgba(61,107,255,.22),transparent 70%),
+  repeating-linear-gradient(0deg,rgba(255,255,255,.05) 0 1px,transparent 1px 90px),
+  repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 1px,transparent 1px 90px),#0A1436}
+.mlabel span{position:absolute;left:0;top:0;transform:translate(-50%,-50%);white-space:nowrap;pointer-events:none;
+  font:800 20px/1 var(--disp);letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.28)}
+
+/* ---------- Journey: harta Europei pe harta reala (vezi journey.js, europaReala) ---------- */
+.eu-svg,.eu-real{position:absolute;inset:0;border-radius:inherit;overflow:hidden}
+/* harta reala sta peste cea desenata si apare lin cand i s-au incarcat imaginile */
+.eu-real{z-index:0;opacity:0;pointer-events:none;transition:opacity .7s ease}
+.europe-card.real .eu-real{opacity:1;pointer-events:auto}
+.europe-card.real .eu-svg{visibility:hidden;transition:visibility 0s linear .7s}
+.eu-real.leaflet-container{background:#0A1436;font:inherit;cursor:default}
+/* marginile se intuneca putin, ca harta sa se topeasca in card */
+.eu-real.leaflet-container::after{content:'';position:absolute;inset:0;z-index:450;pointer-events:none;box-shadow:inset 0 0 70px 10px rgba(7,14,38,.6)}
+/* orasele */
+.ecity-wrap:focus{outline:none}
+.ecity{position:absolute;left:0;top:0;cursor:pointer}
+.ecity .halo{position:absolute;left:-20px;top:-20px;width:40px;height:40px;border-radius:50%;background:rgba(255,204,0,.22);animation:puls 2.4s ease-out infinite}
+.ecity .core{position:absolute;left:-7.5px;top:-7.5px;width:15px;height:15px;border-radius:50%;background:#fff;
+  box-shadow:0 0 0 2px rgba(11,22,56,.55),0 4px 12px rgba(0,0,0,.55);transition:background .25s ease,box-shadow .25s ease,scale .3s var(--spring)}
+.ecity.on .core{background:var(--galben)}
+.ecity .lbl{position:absolute;left:18px;top:-13px;display:flex;flex-direction:column;gap:4px;white-space:nowrap;
+  filter:drop-shadow(0 2px 6px rgba(7,14,38,.95)) drop-shadow(0 0 2px rgba(7,14,38,.9))}
+.ecity .lbl.l{left:auto;right:18px;align-items:flex-end}
+.ecity b{font:800 24px/1 var(--disp);letter-spacing:.06em;text-transform:uppercase;color:#fff}
+.ecity small{font:600 11px/1 var(--font);letter-spacing:.12em;color:rgba(255,255,255,.72)}
+.ecity-wrap:hover .core,.ecity-wrap:focus-visible .core{box-shadow:0 0 0 3px #fff,0 4px 12px rgba(0,0,0,.55)}
+.ecity-wrap:active .core{scale:.86}
+@media (max-width:560px){.ecity b{font-size:18px}.ecity small{font-size:10px}}
+@media (prefers-reduced-motion:reduce){.ecity .halo{animation:none}.eu-real{transition:none}}

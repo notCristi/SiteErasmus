@@ -120,7 +120,14 @@ addEventListener('pagehide', remember);
 addEventListener('pageshow', event => {
   if (event.persisted && playing) vids[active].play().catch(() => {});
 });
+let fadingTimer = 0;
 function setPage(page) {
+  // Cele doua "imbracaminti" ale fundalului se amesteca doar cat dureaza trecerea dintre prima pagina si celelalte (.fading).
+  // In rest ramane doar cea vizibila: amestecul lor peste video costa la fiecare cadru (vezi site.css).
+  if (background.classList.contains(page === 'home' ? 'fundal' : 'bg')) {
+    background.classList.add('fading');
+    clearTimeout(fadingTimer); fadingTimer = setTimeout(() => background.classList.remove('fading'), 900);
+  }
   background.classList.toggle('bg', page === 'home');
   background.classList.toggle('fundal', page !== 'home');
   if (page !== 'home') play(true);

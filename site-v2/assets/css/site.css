@@ -85,6 +85,11 @@ html{-webkit-tap-highlight-color:transparent}
   linear-gradient(180deg,rgba(7,14,38,.72) 0%,rgba(7,14,38,.82) 50%,rgba(7,14,38,.9) 100%)}
 .has-video .look-page{background:linear-gradient(180deg,rgba(7,14,38,.58),rgba(7,14,38,.82))}
 .bg .look-page,.fundal .look-home{opacity:0}
+/* Amestecul de mai sus (isolation + plus-lighter) e nevoie doar cat dureaza trecerea: atunci background-video.js pune clasa .fading.
+   In rest imbracamintea care nu se vede e scoasa de tot, ca browserul sa nu o mai amestece peste video la fiecare cadru. */
+:is(.bg,.fundal):not(.fading) .looks{isolation:auto}
+:is(.bg,.fundal):not(.fading) .look-page{mix-blend-mode:normal}
+.bg:not(.fading) .look-page,.fundal:not(.fading) .look-home{visibility:hidden}
 /* prima pagina: umbra, vigneta si intunecarea (cat spune --dim, pus de home.js) */
 .shade{background:linear-gradient(180deg,rgba(5,10,28,.62) 0%,rgba(5,10,28,.46) 42%,rgba(5,10,28,.74) 100%)}
 .vig{background:radial-gradient(ellipse 75% 70% at 50% 46%,rgba(0,0,0,0) 55%,rgba(0,0,0,.5) 100%)}
@@ -109,7 +114,7 @@ html{-webkit-tap-highlight-color:transparent}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   .glass{background:rgba(20,32,74,.92)}
 }
-a.glass,button.glass{transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s ease,background .35s ease}
+a.glass,button.glass{transition:transform .35s cubic-bezier(.2,.8,.2,1),scale .3s var(--spring),box-shadow .35s ease,background .35s ease}
 a.glass:hover,button.glass:hover{transform:translateY(-3px);box-shadow:inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(255,255,255,.05),0 30px 70px -28px rgba(0,0,0,.85),0 2px 8px rgba(0,0,0,.12)}
 
 /* ---------- butoane ---------- */
@@ -119,6 +124,7 @@ a.glass:hover,button.glass:hover{transform:translateY(-3px);box-shadow:inset 0 1
 .btn--solid{background:var(--crem);color:var(--cerneala);box-shadow:0 10px 30px -12px rgba(0,0,0,.6)}
 .btn--solid:hover{background:#fff}
 .btn.glass{border-radius:999px}
+.btn[aria-disabled="true"]{cursor:default}
 .btn-row{display:flex;flex-wrap:wrap;gap:12px}
 
 /* ---------- meniul de sus ---------- */
@@ -219,6 +225,8 @@ main{display:block}
 .h2{margin-top:12px;font:800 clamp(36px,5.4vw,64px)/.98 var(--disp);text-transform:uppercase;letter-spacing:.005em;color:#fff}
 .h2 .o{color:transparent;-webkit-text-stroke:1.4px var(--crem)}
 .h3{font:700 clamp(24px,2.4vw,30px)/1.05 var(--disp);text-transform:uppercase;letter-spacing:.01em;color:#fff}
+/* paragrafele nu lasa un cuvant singur pe ultimul rand */
+.lead,.muted{text-wrap:pretty}
 .muted{color:var(--text-2)}
 .small{font-size:14px;color:var(--text-3)}
 .sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:clamp(26px,4vw,44px)}
@@ -241,10 +249,17 @@ a.card:hover .arrow{background:var(--crem);color:var(--cerneala);transform:rotat
 
 /* filtre / taburi (sticla) */
 .seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:5px;border-radius:999px}
-.seg button{height:38px;padding:0 16px;border:0;border-radius:999px;background:transparent;cursor:pointer;font:600 14px var(--font);color:rgba(236,240,250,.8);transition:background .2s ease,color .2s ease}
+.seg button{height:38px;padding:0 16px;border:0;border-radius:999px;background:transparent;cursor:pointer;font:600 14px var(--font);color:rgba(236,240,250,.8);transition:background .2s ease,color .2s ease,scale .3s var(--spring)}
 .seg button:hover{color:#fff;background:rgba(255,255,255,.07)}
 .seg button[aria-pressed="true"],.seg button[aria-selected="true"]{color:#fff;background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.08));box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 14px -6px rgba(0,0,0,.5)}
 .seg button .n{margin-left:6px;font-weight:500;color:var(--text-3)}
+/* pastila care aluneca intre optiuni (o pune si o muta layout.js, segPill). Fara ea, optiunea aleasa isi pastreaza fundalul de mai sus. */
+.seg button{position:relative;z-index:1}
+.seg-pill{position:absolute;left:0;top:0;z-index:0;border-radius:999px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.08));box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 14px -6px rgba(0,0,0,.5);
+  transition:transform .42s cubic-bezier(.25,1,.3,1),width .42s cubic-bezier(.25,1,.3,1),height .2s ease,opacity .2s ease}
+.seg.has-pill button[aria-pressed="true"],.seg.has-pill button[aria-selected="true"]{background:none;box-shadow:none}
+@media (prefers-reduced-motion:reduce){.seg-pill{transition:none}}
 
 /* ---------- loc pentru poze (pana vin pozele adevarate) ---------- */
 .ph{position:relative;overflow:hidden;border-radius:var(--r-mic);background:
@@ -286,7 +301,7 @@ a.card:hover .arrow{background:var(--crem);color:var(--cerneala);transform:rotat
 .eu{display:flex;align-items:center;gap:14px}
 .eu svg{width:84px;height:auto;flex:none;border-radius:2px}
 .eu b{font:600 15px/1.25 var(--font);color:#fff}
-.disc{margin-top:18px;font-size:13px;line-height:1.6;color:var(--text-3);max-width:460px}
+.disc{overflow-wrap:anywhere;margin-top:18px;font-size:13px;line-height:1.6;color:var(--text-3);max-width:460px}
 .foot h4{font:600 12px var(--font);letter-spacing:.18em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px}
 .foot ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .foot ul a{text-decoration:none;color:var(--text-2);font-size:15px}
@@ -307,3 +322,74 @@ a.card:hover .arrow{background:var(--crem);color:var(--cerneala);transform:rotat
   *{scroll-behavior:auto!important}
 }
 [hidden]{display:none!important}
+
+/* =========================================================
+   RASPUNS LA APASARE SI MICI ANIMATII
+   Tot ce se poate apasa se strange putin cat tii apasat si revine cu un mic arc cand dai drumul.
+   Cat de mult se strange: valorile "scale" de mai jos (1 = deloc). Arcul: --spring.
+   ========================================================= */
+:root{--spring:cubic-bezier(.34,1.56,.64,1)}
+.btn{transition:scale .3s var(--spring),background-color .2s ease,color .2s ease}
+.menu-btn,.sheet .close,.section-home,.gal button,.stop-media button{transition:scale .3s var(--spring)}
+.btn:active,.seg button:active,.menu-btn:active{scale:.95}
+a.glass:active,button.glass:active{scale:.98}            /* cardurile mari se strang mai putin */
+a.glass.btn:active,button.glass.btn:active{scale:.95}
+.lb button:active,.sheet .close:active,.section-home:active{scale:.9}
+.gal button:active,.stop-media button:active{scale:.97}
+.section-link:active span{scale:.95}
+/* linkurile de text: culoarea se schimba lin, iar la apasare palesc o clipa */
+.crumbs a,.foot ul a,.foot-bottom a,.addr a,.write .mail{transition:color .2s ease,opacity .15s ease}
+.crumbs a:active,.foot ul a:active,.foot-bottom a:active,.addr a:active,.write .mail:active,.link-arrow:active{opacity:.6}
+/* pinii de pe harti */
+.pin .dot,.city .core{transform-box:fill-box;transform-origin:center}
+.pin .dot{transition:fill .25s ease,stroke .25s ease,scale .3s var(--spring)}
+.city .core{transition:fill .25s ease,scale .3s var(--spring)}
+.pin:active .dot,.city:active .core{scale:.86}
+/* pozele se apropie putin cand treci cu mouse-ul peste ele */
+.media img{transition:transform .7s var(--page-ease)}
+@media (hover:hover){
+  :is(.gal button,.stop-media button,a.entry):hover .media img{transform:scale(1.05)}
+}
+/* continut nou (poze dupa un filtru sau "Load more", locurile unei calatorii): apare pe rand, de jos */
+@keyframes apare{from{opacity:0;translate:0 12px}}
+.pop{animation:apare .45s var(--page-ease) both;animation-delay:calc(min(var(--i,0),14) * 28ms)}
+.stops > .stop{animation:apare .5s var(--page-ease) both}
+.stops > .stop:nth-child(2){animation-delay:.06s}
+.stops > .stop:nth-child(3){animation-delay:.12s}
+.stops > .stop:nth-child(n+4){animation-delay:.18s}
+/* caseta de pe harta si poza din vizualizator: se schimba lin, nu sar */
+@keyframes schimba{from{opacity:0;scale:.97}}
+.map-box > *{animation:apare .3s var(--page-ease) both}
+.lb-stage > *{animation:schimba .28s var(--page-ease) both}
+@media (prefers-reduced-motion:reduce){
+  .pop,.stops > .stop,.map-box > *,.lb-stage > *{animation:none}
+  .media img{transition:none}
+}
+
+/* ---------- butonul pentru sunet / muzica (assets/js/sfx.js + assets/js/music.js) ---------- */
+.music{position:fixed;left:max(18px, env(safe-area-inset-left, 0px));bottom:max(18px, env(safe-area-inset-bottom, 0px));z-index:75;width:42px;height:42px;padding:0;border:1px solid rgba(16,32,74,.18);border-radius:50%;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:3px;color:var(--cerneala);background:rgba(255,255,255,.6);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  transition:scale .3s var(--spring),background .3s ease,border-color .3s ease,color .3s ease}
+.music:hover{background:#fff}
+.music:active{scale:.9}
+.music:focus-visible{border-radius:50%;outline-color:var(--albastru)}
+/* pe ecranul intunecat (dupa logo si pe celelalte pagini): acelasi stil ca butonul Skip -> (.seq-skip) */
+.music.dark{color:#fff;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22)}
+.music.dark:hover{background:rgba(255,255,255,.2)}
+.music.dark:focus-visible{outline-color:var(--galben)}
+/* trei bare: se misca atunci cand chiar se aude un sunet (muzica continua sau un SFX scurt) */
+.music i{width:3px;height:14px;border-radius:2px;background:currentColor;transform-origin:50% 100%;transform:scaleY(.3);transition:transform .25s ease}
+.music.on i{animation:music-bar 1s ease-in-out infinite}
+.music.on i:nth-child(2){animation-delay:-.35s}
+.music.on i:nth-child(3){animation-delay:-.7s}
+.music.pulse i{animation:music-pulse .34s ease-out}
+.music.pulse i:nth-child(2){animation-delay:.04s}
+.music.pulse i:nth-child(3){animation-delay:.08s}
+@keyframes music-bar{0%,100%{transform:scaleY(.3)}50%{transform:scaleY(1)}}
+@keyframes music-pulse{0%{transform:scaleY(.3)}35%{transform:scaleY(1)}100%{transform:scaleY(.3)}}
+/* oprit: barele sunt taiate cu o linie */
+.music[aria-pressed="false"]{color:rgba(16,32,74,.55)}
+.music.dark[aria-pressed="false"]{color:rgba(255,255,255,.55)}
+.music[aria-pressed="false"]::after{content:'';position:absolute;width:24px;height:2px;border-radius:2px;background:currentColor;rotate:-45deg}
+@media (prefers-reduced-motion:reduce){.music.on i,.music.pulse i{animation:none}.music.on i{transform:scaleY(.75)}}

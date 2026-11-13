@@ -14,6 +14,7 @@
     final:    { start: 4.05, dur: 0.40 },
     shine:    { start: 4.50, dur: 0.80 },
     tag:      { start: 3.50, step: 0.014, dur: 0.40 },   // sloganul mic, litera cu litera
+    patch:    { start: 2.30, dur: 0.90 },                // pata alba din jurul textului apare odata cu literele (nu inaintea lor)
     zoomEnd: 4.05,
     end: 5.35,
   };
@@ -195,7 +196,7 @@
   function flagsDoneAt() {
     const v = V();
     if (VAR === 'A') return v.brush.end + 0.02;
-    return Math.max(v.dk.end + v.trail.tail, v.ro.end, v.fr.end) + 0.02;
+    return Math.max(v.dk.end + v.trail.tail, v.ro.end, v.fr.end, TL.patch.start + TL.patch.dur) + 0.02;
   }
   function drawFlagsPart(t) {
     const v = V();
@@ -218,8 +219,9 @@
     // panglicile apar in urma Danemarcei
     let P = remapS(Math.max(0, mD.s - v.trail.lag)) * clamp01((t - v.dk.start) / 0.2);
     if (t > v.dk.end) P += (1 + 2 * LOOP.soft - P) * smooth(clamp01((t - v.dk.end) / v.trail.tail));
+    if (t > v.dk.end + v.trail.tail) P = 1 + 2 * LOOP.soft;
     const glow = v.glow * (1 - smooth(clamp01((t - v.dk.end) / v.trail.tail)));
-    const bgFade = smooth(clamp01((t - (v.dk.end + v.trail.tail) + 0.35) / 0.35));
+    const bgFade = smooth(clamp01((t - TL.patch.start) / TL.patch.dur));
     // fiecare steag isi ascunde locul pana ajunge acolo
     const hide = [false, pF0 < 1, pR < 0.96, pD < 0.96];
     if (t > v.dk.start) drawRibbons(P, glow, hide, bgFade);
@@ -265,7 +267,7 @@
         if (i === L.length - 1) {
           sprite(s, p * 3, outBack(p, 2.0), (1 - outCubic(p)) * Math.PI / 2, 0, 0, s.x + s.w / 2, s.y + s.h / 2);
         } else {
-          sprite(s, p * 2.2, 0.94 + 0.06 * outCubic(p), 0, 0, (1 - outCubic(p)) * 48);
+          sprite(s, p * 2.2, 0.94 + 0.06 * outCubic(p), 0, 0, (1 - outBack(p, 1.25)) * 48);   // urca, trece putin de loc si se aseaza
         }
       });
       // 5. capetele siluetelor "sar" in scena

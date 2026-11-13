@@ -26,7 +26,7 @@
   <header class="wrap page-head">
     <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><i></i><span aria-current="page">Journey</span></nav>
     <h1 class="outline page-title">The journey</h1>
-    <p class="lead">Three trips across Europe. Pick a trip, then tap a place on the map to see the photos and videos from there.</p>
+    <p class="lead">Three trips across Europe. Pick a trip to read what it was about, open the learning materials, follow every day on the map and see the results.</p>
   </header>
 
   <section class="wrap section--tight" style="padding-top:0">
@@ -34,7 +34,7 @@
       <div class="glass europe-card" id="europe" data-reveal></div>
       <div data-reveal style="--d:.08s">
         <span class="eyebrow">Three trips</span>
-        <h2 class="h2" style="margin-bottom:22px">Orsay. Fjerritslev. <span class="o">Brașov.</span></h2>
+        <h2 class="h2" style="margin-bottom:22px">Brașov. Orsay. <span class="o">Fjerritslev.</span></h2>
         <div class="mob-list" id="mobList"></div>
       </div>
     </div>
@@ -45,19 +45,27 @@
       <div class="seg glass" id="mobTabs" role="tablist" aria-label="Choose a trip"></div>
       <p class="mob-info" id="mobInfo"></p>
     </div>
-    <div class="journey">
-      <div class="glass map-card" id="mapCard">
-        <div class="map" id="map"></div>
-        <span class="map-legend glass" id="mapLegend"></span>
-        <div class="map-box glass" id="mapBox" aria-live="polite"></div>
+    <!-- cele 5 rubrici ale fiecarei mobilitati (aceleasi la toate trei). Continutul lor vine din assets/js/data.js -->
+    <div class="hub-bar"><div class="seg glass" id="hubTabs" role="tablist" aria-label="Sections of this trip"></div></div>
+    <div id="hubBody"></div>
+    <!-- rubrica 3, Daily activities: zilele, harta si locurile -->
+    <div id="hubDaily" hidden>
+      <div class="days" id="days"></div>
+      <div class="journey">
+        <div class="glass map-card" id="mapCard">
+          <div class="map" id="map"></div>
+          <span class="map-legend glass" id="mapLegend"></span>
+          <div class="map-box glass" id="mapBox" aria-live="polite"></div>
+        </div>
+        <div class="stops" id="stops"></div>
       </div>
-      <div class="stops" id="stops"></div>
     </div>
   </section>
 </main>
 <div id="foot"></div>
 <script src="assets/js/data.js"></script>
 <script src="assets/js/layout.js"></script>
+<script src="assets/js/sfx.js"></script>
 <script src="assets/js/background-video.js"></script>
 <script src="assets/js/pages.js"></script>
 <script src="assets/js/europe.js"></script>

@@ -5,16 +5,18 @@ const S = window.SITE, U = window.UI, { I, esc, tx, tile } = U;
 const page = document.body.dataset.page;
 const $ = id => document.getElementById(id);
 const mobName = id => (S.mob(id) || {}).city || '';
+// linkurile care deschid alt tab spun asta si cititoarelor de ecran
+const newTab = '<span class="sr"> (opens in a new tab)</span>';
 
 /* ---------- harta Europei: cele trei orase si drumul dintre ele ---------- */
 U.europe = ({ active = '', interactive = false, slice = false, labels = true } = {}) => {
   const E = window.EUROPE; if (!E) return '';
-  const C = E.cities, order = ['fr', 'dk', 'ro'];
+  const C = E.cities, order = S.mobilities.map(m => m.id);   // ordinea mobilitatilor: Brasov, Orsay, Fjerritslev
   const arc = (a, b, bend) => {
     const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1];
     return `Q${(mx - dy * bend).toFixed(1)} ${(my + dx * bend).toFixed(1)} ${b[0]} ${b[1]}`;
   };
-  const route = `M${C.fr[0]} ${C.fr[1]} ${arc(C.fr, C.dk, -0.22)} ${arc(C.dk, C.ro, -0.2)}`;
+  const route = `M${C.ro[0]} ${C.ro[1]} ${arc(C.ro, C.fr, 0.12)} ${arc(C.fr, C.dk, -0.22)}`;
   const lab = { fr: [-18, 0, 'end'], dk: [18, 0, 'start'], ro: [18, 0, 'start'] };
   const cities = order.map(id => {
     const m = S.mob(id), [x, y] = C[id], [dx, dy, anchor] = lab[id];
@@ -101,7 +103,7 @@ if (page === 'partners') {
         </dl>
         <div class="btn-row">
           <a class="btn btn--solid" href="journey.html#${s.id}">The trip to ${esc(s.city)} ${I.arrow}</a>
-          ${s.url ? `<a class="btn glass" href="${esc(s.url)}" target="_blank" rel="noopener">School website ${I.ext}</a>` : `<span class="btn glass" aria-disabled="true"><span class="ph-txt">[School website]</span></span>`}
+          ${s.url ? `<a class="btn glass" href="${esc(s.url)}" target="_blank" rel="noopener">School website${newTab} ${I.ext}</a>` : `<span class="btn glass" aria-disabled="true"><span class="ph-txt">[School website]</span></span>`}
         </div>
       </div>
     </article>`).join('');
@@ -115,16 +117,22 @@ if (page === 'journal') {
   const counts = id => S.journal.filter(e => id === 'all' || e.mob === id).length;
   function lista() {
     head.hidden = false;
-    const tabs = [['all', 'All'], ...S.mobilities.map(m => [m.id, m.city])];
     const list = S.journal.filter(e => filtru === 'all' || e.mob === filtru);
-    root.innerHTML = `
+    // selectorul se construieste o singura data; la click se schimba doar lista de sub el
+    if (!root.querySelector('.filters')) {
+      const tabs = [['all', 'All'], ...S.mobilities.map(m => [m.id, m.city])];
+      root.innerHTML = `
       <div class="filters" data-reveal>
         <div class="seg glass" role="group" aria-label="Filter by mobility">${tabs.map(([id, t]) => `<button type="button" data-f="${id}" aria-pressed="${id === filtru}">${t}<span class="n">${counts(id)}</span></button>`).join('')}</div>
       </div>
+      <div id="journalList"></div>`;
+      root.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { if (b.dataset.f === filtru) return; filtru = b.dataset.f; arata = PAS; lista(); }));
+    }
+    U.segSet(root.querySelector('.seg'), 'aria-pressed', b => b.dataset.f === filtru);
+    $('journalList').innerHTML = `
       <div class="grid entries">${list.slice(0, arata).map(entryCard).join('') || '<p class="glass entries-empty">No entries yet. Check back soon.</p>'}</div>
       ${list.length > arata ? '<div class="more"><button class="btn glass" type="button" id="older">Load older entries</button></div>' : ''}`;
-    root.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { filtru = b.dataset.f; arata = PAS; lista(); root.querySelector(`[data-f="${filtru}"]`).focus(); }));
-    const o = $('older'); if (o) o.addEventListener('click', () => { arata += PAS; lista(); });
+    const o = $('older'); if (o) o.addEventListener('click', () => { const n = arata; arata += PAS; lista(); root.querySelectorAll('.entry')[n]?.focus(); });
     U.reveal(root);
   }
   function articol(e) {
@@ -146,7 +154,7 @@ if (page === 'journal') {
       </article>`;
   }
   function ruta() {
-    const id = decodeURIComponent(location.hash.slice(1));
+    let id = ''; try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) {}
     const e = S.journal.find(x => x.id === id);
     if (e) { articol(e); scrollTo(0, 0); }
     else {
@@ -167,7 +175,8 @@ if (page === 'gallery') {
   let mob = 'all', tip = 'all', arata = PAS;
   const tabs = [['all', 'All'], ...S.mobilities.map(m => [m.id, m.city])];
   const tipuri = [['all', 'Photos + videos'], ['photo', 'Photos'], ['video', 'Videos']];
-  function deseneaza() {
+  // from = de la a cata poza incep cele noi (doar ele apar cu animatie)
+  function deseneaza(from = 0) {
     const list = all.filter(m => (mob === 'all' || m.mob === mob) && (tip === 'all' || m.type === tip));
     let featDone = false;
     const items = list.slice(0, arata).map((m, i) => {
@@ -175,20 +184,28 @@ if (page === 'gallery') {
       if (!featDone && m.type === 'video') { cls = 'feat'; featDone = true; }
       else if (i % 7 === 3) cls = 'tall';
       else if (i % 11 === 8) cls = 'wide';
-      return `<button type="button" class="${cls}" data-i="${i}" aria-label="Open ${esc(m.caption)}">${tile(m)}</button>`;
+      return `<button type="button" class="${cls}${i >= from ? ' pop' : ''}" style="--i:${i - from}" data-i="${i}" aria-label="Open ${esc(m.caption)}">${tile(m)}</button>`;
     }).join('');
-    root.innerHTML = `
+    // selectoarele se construiesc o singura data; la click se schimba doar pozele de sub ele
+    if (!root.querySelector('.filters')) {
+      root.innerHTML = `
       <div class="filters">
         <div class="seg glass" role="group" aria-label="Filter by mobility">${tabs.map(([id, t]) => `<button type="button" data-m="${id}" aria-pressed="${id === mob}">${t}</button>`).join('')}</div>
         <div class="seg glass" role="group" aria-label="Filter by type">${tipuri.map(([id, t]) => `<button type="button" data-t="${id}" aria-pressed="${id === tip}">${t}</button>`).join('')}</div>
       </div>
+      <div id="galBody"></div>`;
+      root.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { if (b.dataset.m === mob) return; mob = b.dataset.m; arata = PAS; deseneaza(); }));
+      root.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => { if (b.dataset.t === tip) return; tip = b.dataset.t; arata = PAS; deseneaza(); }));
+    }
+    const [segM, segT] = root.querySelectorAll('.filters .seg');
+    U.segSet(segM, 'aria-pressed', b => b.dataset.m === mob);
+    U.segSet(segT, 'aria-pressed', b => b.dataset.t === tip);
+    $('galBody').innerHTML = `
       <p class="gal-count" aria-live="polite">${list.length} ${list.length === 1 ? 'item' : 'items'}</p>
       <div class="gal" style="margin-top:14px">${items || '<p class="glass entries-empty" style="grid-column:1/-1">Nothing here yet.</p>'}</div>
       ${list.length > arata ? '<div class="more"><button class="btn glass" type="button" id="moreG">Load more</button></div>' : ''}`;
-    root.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { mob = b.dataset.m; arata = PAS; deseneaza(); root.querySelector(`[data-m="${mob}"]`).focus(); }));
-    root.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => { tip = b.dataset.t; arata = PAS; deseneaza(); root.querySelector(`[data-t="${tip}"]`).focus(); }));
     root.querySelectorAll('.gal [data-i]').forEach(b => b.addEventListener('click', () => U.lightbox(list.slice(0, arata), +b.dataset.i)));
-    const mo = $('moreG'); if (mo) mo.addEventListener('click', () => { arata += PAS; deseneaza(); });
+    const mo = $('moreG'); if (mo) mo.addEventListener('click', () => { const n = arata; arata += PAS; deseneaza(n); root.querySelector(`.gal [data-i="${n}"]`)?.focus(); });
   }
   const h = location.hash.slice(1); if (S.mob(h)) mob = h;
   deseneaza();
@@ -203,12 +220,12 @@ if (page === 'contact') {
     ${mailOK ? `<a class="mail" href="mailto:${esc(P.email)}">${esc(P.email)}</a>` : `<span class="mail">${tx(P.email)}</span>`}
     <div class="btn-row">
       ${mailOK ? `<a class="btn btn--solid" href="mailto:${esc(P.email)}">${I.mail} Send an email</a>` : ''}
-      <a class="btn glass" href="${esc(P.instagramUrl || '#')}"${P.instagramUrl ? ' target="_blank" rel="noopener"' : ''}>${I.insta} ${tx(P.instagram)}</a>
+      ${P.instagramUrl ? `<a class="btn glass" href="${esc(P.instagramUrl)}" target="_blank" rel="noopener">${I.insta} ${tx(P.instagram)}${newTab}</a>` : `<span class="btn glass" aria-disabled="true">${I.insta} ${tx(P.instagram)}</span>`}
     </div>`;
   $('addrs').innerHTML = S.schools.map((s, i) => `
     <div class="glass card addr" data-reveal style="--d:${i * 0.06}s">
       <b>${esc(s.name)}</b><span>${esc(s.address)}</span>
-      ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">School website ${I.ext}</a>` : '<span class="ph-txt">[School website]</span>'}
+      ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">School website${newTab} ${I.ext}</a>` : '<span class="ph-txt">[School website]</span>'}
     </div>`).join('');
 }
 

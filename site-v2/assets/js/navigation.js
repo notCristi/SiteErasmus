@@ -91,7 +91,7 @@ function position(url, saved) {
   scrollTo({ left: 0, top: 0, behavior: 'instant' });
   if (!url.hash) return;
   let id; try { id = decodeURIComponent(url.hash.slice(1)); } catch { return; }
-  const target = document.body.dataset.page === 'journey' && window.SITE.mob(id)
+  const target = document.body.dataset.page === 'journey' && window.SITE.mob(id.split('-')[0])
     ? document.getElementById('detail') : document.getElementById(id);
   target?.scrollIntoView({ behavior: 'instant' });
 }
@@ -140,7 +140,7 @@ async function go(href, { fromHome = false, pop = false, saved = null } = {}) {
       if (rect.top < innerHeight && rect.bottom > 0) element.classList.add('in');
     });
     if (!pop) {
-      const heading = main.querySelector('h1');
+      const heading = [...main.querySelectorAll('h1')].find(h => !h.closest('[hidden]'));
       if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
     }
     await animateMain(main, true);

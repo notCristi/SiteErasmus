@@ -46,10 +46,10 @@ function rndCu(seed) {   // numere "la intamplare" care ies la fel de fiecare da
   let a = seed >>> 0;
   return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
-function panza(B) {   // un canvas de marimea literei, in pixeli CSS
+function panza(B, citit) {   // un canvas de marimea literei, in pixeli CSS
   const c = document.createElement('canvas');
   c.width = Math.round(B.W * DPR); c.height = Math.round(B.H * DPR);
-  const x = c.getContext('2d');
+  const x = c.getContext('2d', citit ? { willReadFrequently: true } : undefined);
   x.setTransform(DPR, 0, 0, DPR, 0, 0);
   x.lineJoin = x.lineCap = 'round';
   return { c, x };
@@ -64,7 +64,7 @@ function pune(x, ch, fam, g, B, lat = B.maxW) {
 }
 // litera plina, alba (o folosim ca masca si ca sa stim unde e "inauntru")
 function masca(ch, fam, g, B, ingrosat = 0, lat) {
-  const t = panza(B), p = pune(t.x, ch, fam, g, B, lat);
+  const t = panza(B, true), p = pune(t.x, ch, fam, g, B, lat);
   t.x.fillStyle = t.x.strokeStyle = '#fff';
   t.x.fillText(ch, p.x, p.y);
   if (ingrosat) { t.x.lineWidth = ingrosat; t.x.strokeText(ch, p.x, p.y); }
@@ -262,20 +262,67 @@ const FINAL = { S: 'crosetat', T: 'graffiti', O: 'confetti', R: 'hartie', Y: 'ne
 const INCLINAT = [-4, 3, -2, 0, 3];
 const GEO = { w: 0.78, padX: 0.30, sus: 0.46, jos: 0.42 };   // la fel ca in home.css (.mat)
 
-let litere = null, litereMarime = 0;
+let litere = null, litereMarime = 0, litereProm = null, litereId = 0, pauzaPana = 0;
+function masoaraSeq() {
+  const lat = innerWidth >= 760 && innerWidth > innerHeight * 0.95;   // ecran lat: mai putine randuri
+  seq.classList.toggle('ingust', !lat);
+  const marime = parseFloat(getComputedStyle(box).fontSize);
+  const cap = capDin(DISP, '800');
+  seq.style.setProperty('--cap', cap.toFixed(3));
+  return { lat, marime, cap };
+}
+// Deseneaza cele 30 de canvas-uri din STORY pe rand (cate unul pe cadru), cu pauza cat timp pleaca ERASMUS+.
 function deseneazaLitere(marime, cap) {
-  if (litere && litereMarime === marime) return;
+  if (litereProm && litereMarime === marime) return litereProm;
   litereMarime = marime;
+  const id = ++litereId;
   const B = { W: (GEO.w + 2 * GEO.padX) * marime, H: (cap + GEO.sus + GEO.jos) * marime, cap: cap * marime, maxW: GEO.w * marime };
   B.cx = B.W / 2; B.base = (GEO.sus + cap) * marime;
+  const pasi = [];
   litere = [...'STORY'].map((ch, i) => {
     const el = document.createElement('span'); el.className = 'mat'; el.style.setProperty('--r', INCLINAT[i] + 'deg');
     ORDINE.forEach((m, k) => {
       const t = panza(B);
-      try { MAT[m](t.x, ch, B, rndCu(i * 97 + k * 131 + 5)); } catch (e) { console.error(e); }
       t.c.dataset.m = m; el.appendChild(t.c);
+      pasi.push(() => { try { MAT[m](t.x, ch, B, rndCu(i * 97 + k * 131 + 5)); } catch (e) { console.error(e); } });
     });
     return el;
+  });
+  return (litereProm = new Promise(ok => {
+    let p = 0;
+    const urm = () => {
+      if (id !== litereId || p >= pasi.length) { ok(); return; }
+      const acum = performance.now();
+      if (acum < pauzaPana) { setTimeout(urm, Math.ceil(pauzaPana - acum)); return; }
+      pasi[p++]();
+      if (p < pasi.length) setTimeout(urm, 16);
+      else ok();
+    };
+    setTimeout(urm, 16);
+  }));
+}
+// pregatirea asteapta (nu deseneaza nimic) inca ms milisecunde: o cere home.js cat timp ruleaza o animatie
+function pauza(ms) { pauzaPana = Math.max(pauzaPana, performance.now() + ms); }
+// Fisierele fonturilor se descarca din timp, cat ruleaza logoul (doar descarcare, nu costa cadre). Asa, cand le cerem
+// mai tarziu, vin toate deodata, intr-o clipa, nu pe rand timp de o secunda in care pagina ar redesena textul de fiecare data.
+function incalzeste() {
+  if (location.protocol === 'file:') return;   // la dublu click fonturile sunt deja in fisierul CSS
+  const familii = new Set(FONTURI.map(f => f[1]));
+  for (const foaie of document.styleSheets) {
+    let reguli; try { reguli = foaie.cssRules; } catch (e) { continue; }
+    for (const r of reguli) {
+      if (r.type !== 5) continue;   // @font-face
+      const fam = r.style.getPropertyValue('font-family').replace(/["']/g, '').trim();
+      const m = /url\(["']?([^"')]+)["']?\)/.exec(r.style.getPropertyValue('src'));
+      if (familii.has(fam) && m) fetch(new URL(m[1], foaie.href || location.href)).catch(() => {});
+    }
+  }
+}
+if (document.readyState === 'complete') setTimeout(incalzeste, 300); else addEventListener('load', () => setTimeout(incalzeste, 300), { once: true });
+function pregateste() {
+  return incarcaFonturi().then(() => {
+    const { marime, cap } = masoaraSeq();
+    return deseneazaLitere(marime, cap);
   });
 }
 function material(el, m) {
@@ -353,15 +400,14 @@ function play() {
   const stergeTot = () => sterge(live.querySelectorAll('.ch,.mat').length, 24);
 
   return (async () => {
+    pauzaPana = performance.now() + 700;   // lasa tranzitia lui ERASMUS+ (.7s) sa ruleze liber, fara desen pe fundal
     const lat = innerWidth >= 760 && innerWidth > innerHeight * 0.95;   // ecran lat: mai putine randuri
     seq.classList.toggle('ingust', !lat);
     curata();
-    await incarcaFonturi(); if (oprit()) throw STOP;
-    const marime = parseFloat(getComputedStyle(box).fontSize);
-    const cap = capDin(DISP, '800');
-    seq.style.setProperty('--cap', cap.toFixed(3));
-    deseneazaLitere(marime, cap);
     await w(500);   // ERASMUS+ pleaca
+    await incarcaFonturi(); if (oprit()) throw STOP;
+    const { marime, cap } = masoaraSeq();
+    const gataLitere = deseneazaLitere(marime, cap);
 
     // 1. THREE SCHOOLS -> THREE COUNTRIES
     fantoma(lat ? ['THREE COUNTRIES'] : ['THREE', 'COUNTRIES']);
@@ -377,6 +423,7 @@ function play() {
     await w(1000);
     await stergeTot();
     await w(260);
+    await gataLitere; if (oprit()) throw STOP;
 
     // 2. ONE SHARED STORY: STORY trece prin toate materialele, apoi fiecare litera ramane cu al ei
     fantoma(lat ? ['ONE SHARED #'] : ['ONE SHARED', '#']);
@@ -436,5 +483,5 @@ function play() {
 }
 function stop() { rulare++; }
 
-window.homeSeq = { play, stop, pregateste: incarcaFonturi };
+window.homeSeq = { play, stop, pregateste, pauza };
 })();

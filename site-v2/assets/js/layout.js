@@ -145,7 +145,7 @@ if (sheet) {
       <div class="foot-top">
         <div>
           <div class="eu">${euRect()}<b>Co-funded by<br>the European Union</b></div>
-          <p class="disc">Views and opinions expressed are however those of the author(s) only and do not necessarily reflect those of the European Union. Neither the European Union nor the granting authority can be held responsible for them.<br>Project code: ${tx(P.code)}</p>
+          <p class="disc">Views and opinions expressed are however those of the author(s) only and do not necessarily reflect those of the European Union or ${tx(P.grantAuthority)}. Neither the European Union nor the granting authority can be held responsible for them.<br>Project code: ${tx(P.code)}</p>
         </div>
         <div><h4>Project</h4><ul>${LINKS.slice(0, 5).map(([, t, h]) => `<li><a href="${h}">${t}</a></li>`).join('')}</ul></div>
         <div><h4>Legal</h4><ul><li><a href="legal.html#privacy">Privacy policy</a></li><li><a href="legal.html#photos">Photo consent</a></li><li><a href="legal.html#credits">Credits</a></li></ul></div>
@@ -179,7 +179,7 @@ document.body.insertAdjacentHTML('beforeend', `
 <div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden>
   <span class="count" id="lbCount"></span>
   <div class="lb-stage" id="lbStage"></div>
-  <p class="lb-cap glass" id="lbCap"></p>
+  <p class="lb-cap glass" id="lbCap" aria-live="polite"></p>
   <button class="x glass" type="button" aria-label="Close">${I.x}</button>
   <button class="prev glass" type="button" aria-label="Previous">${I.prev}</button>
   <button class="next glass" type="button" aria-label="Next">${I.next}</button>
@@ -208,7 +208,7 @@ function lbOpen(items, i) {
 function lbClose() {
   lb.classList.remove('open'); lbStage.innerHTML = '';
   document.documentElement.classList.remove('sheet-open');
-  setTimeout(() => { lb.hidden = true; }, 260);
+  setTimeout(() => { if (!lb.classList.contains('open')) lb.hidden = true; }, 260);
   if (lbBack) lbBack.focus();
 }
 lb.querySelector('.x').addEventListener('click', lbClose);
@@ -229,7 +229,34 @@ lb.addEventListener('touchend', e => {
   if (Math.abs(dx) > 50) lbShow(lbI + (dx < 0 ? 1 : -1));
 }, { passive: true });
 
-window.UI = { I, esc, tx, tile, euDisc, euRect, reveal, lightbox: lbOpen, hash,
+/* ---------- selectoarele (.seg): pastila care aluneca intre optiuni ---------- */
+// Selectorul ramane pe loc cand alegi altceva; se muta doar pastila din spatele optiunii alese (stilul e in site.css).
+const segRO = 'ResizeObserver' in window ? new ResizeObserver(es => es.forEach(e => segPill(e.target, false))) : null;
+function segPill(seg, animate = true) {
+  if (!seg) return;
+  let pill = seg.querySelector(':scope > .seg-pill');
+  const fresh = !pill;
+  if (fresh) {
+    pill = document.createElement('i'); pill.className = 'seg-pill'; pill.setAttribute('aria-hidden', 'true');
+    seg.prepend(pill); seg.classList.add('has-pill'); segRO?.observe(seg);
+  }
+  const on = seg.querySelector('button[aria-pressed="true"],button[aria-selected="true"]');
+  if (!on) { pill.style.opacity = 0; return; }
+  const jump = fresh || !animate;   // prima asezare si redimensionarea: pe loc, fara alunecare
+  if (jump) pill.style.transition = 'none';
+  pill.style.opacity = 1;
+  pill.style.width = on.offsetWidth + 'px'; pill.style.height = on.offsetHeight + 'px';
+  pill.style.transform = `translate(${on.offsetLeft}px,${on.offsetTop}px)`;
+  if (jump) { void pill.offsetWidth; pill.style.transition = ''; }
+}
+// marcheaza optiunea aleasa (attr = 'aria-pressed' sau 'aria-selected') si muta pastila la ea
+function segSet(seg, attr, isOn) {
+  if (!seg) return;
+  seg.querySelectorAll('button').forEach(b => b.setAttribute(attr, !!isOn(b)));
+  segPill(seg);
+}
+
+window.UI = { I, esc, tx, tile, euDisc, euRect, reveal, lightbox: lbOpen, hash, segPill, segSet,
   closeOverlays() { if (sheet?.classList.contains('open')) menu(false); if (!lb.hidden) lbClose(); },
 };
 document.addEventListener('DOMContentLoaded', () => reveal());

@@ -31,11 +31,16 @@ html.lock,html.lock body{overflow:hidden;overscroll-behavior:none}
 /* ---------- ERASMUS+ mare, din contur, si motto-ul ----------
    Literele din logo raman pe ecran si devin literele astea (home.js muta fiecare <span>). */
 .hero-txt{position:absolute;left:0;right:0;top:110px;bottom:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(18px,3.2vh,34px);padding:0 16px 6vh;text-align:center;
-  transition:opacity .5s ease,transform .7s cubic-bezier(.2,.8,.2,1)}
-.mega{--fs:clamp(64px, min(20vw, 25vh), 250px);font-size:var(--fs);line-height:1;filter:drop-shadow(0 6px 24px rgba(0,0,0,.45))}
+  will-change:transform,opacity;backface-visibility:hidden;transition:opacity .5s ease,transform .7s cubic-bezier(.2,.8,.2,1)}
+.mega{--fs:clamp(64px, min(20vw, 25vh), 250px);font-size:var(--fs);line-height:1}
+/* Umbra titlului apare abia cand literele au ajuns la locul lor. Cat zboara din logo (fiecare litera se misca separat),
+   umbra ar trebui recalculata la fiecare cadru pe tot titlul: de acolo veneau cele mai multe cadre pierdute. */
+.hero.is-hero .mega,.hero.is-seq .mega,.hero.is-cols .mega{filter:drop-shadow(0 6px 24px rgba(0,0,0,.45))}
+.hero.is-hero .mega{transition:filter .5s ease}
 .mega-in{--sy:1.5;display:flex;align-items:flex-end;margin-top:.5em;transform:scaleY(var(--sy));transform-origin:50% 100%;
   font:800 1em/1 var(--disp);letter-spacing:.012em;color:transparent;-webkit-text-stroke:clamp(1.4px,.0105em,2.4px) var(--crem)}
-.mega-in span{display:block;will-change:transform,opacity}
+.mega-in span{display:block}
+.hero:not(.is-hero):not(.is-seq):not(.is-cols) .mega-in span{will-change:transform,opacity}
 .mega-in i{display:inline-block;width:0;height:0}   /* arata unde e linia de baza a literei */
 /* plusul nu e intins ca literele: il strangem inapoi aproape la forma lui (home.js ii pune centrul).
    --plus = cat de inalt e fata de forma lui normala: 1 = exact 1:1, 1.12 = cu 12% mai inalt */
@@ -48,7 +53,7 @@ html.lock,html.lock body{overflow:hidden;overscroll-behavior:none}
 .explore:hover{color:#fff}
 .hero.is-hero .explore{opacity:1;visibility:visible;transition:opacity .4s ease .3s}
 /* cand incepe textul sau apar coloanele, ERASMUS+ pleaca */
-.hero.is-seq .hero-txt,.hero.is-cols .hero-txt{opacity:0;transform:translateY(-4vh) scale(1.05);pointer-events:none}
+.hero.is-seq .hero-txt,.hero.is-cols .hero-txt{opacity:0;transform:translate3d(0,-4vh,0) scale(1.05);pointer-events:none}
 
 /* ---------- sus ramane doar steagul UE (bara cu About, Partners... nu mai apare pe prima pagina) ---------- */
 body[data-page="home"]{--divider:rgba(255,255,255,.16);--flag-rim:8px}
@@ -240,4 +245,16 @@ body[data-page="home"] .nav .flag.with-rim::after,.cols-flag.on::after{opacity:1
 @media (prefers-reduced-motion:reduce){
   .hint.on,.explore svg,.caret,.mat.fin canvas.on[data-m="neon"]{animation:none}
   .col,.hero.is-cols .col,body[data-page="home"] .nav .flag::after{transition:none}
+}
+
+/* ---------- raspuns la apasare (ca pe celelalte pagini, vezi finalul site.css) ---------- */
+.skip:active,.seq-skip:active{scale:.95}
+#start:active .ring{transform:scale(.95)}
+.col-a{transition:background .3s ease,color .3s ease,opacity .3s ease,transform .4s ease,scale .3s var(--spring)}
+.col:active .col-a{scale:.88}
+
+/* butonul de muzica: pe telefon e mai mic si mai jos, ca sa nu stea peste numarul ultimei benzi */
+@media (max-width:860px),(max-aspect-ratio:4/5){
+  body[data-page="home"] .music{width:34px;height:34px;left:max(8px, env(safe-area-inset-left, 0px));bottom:max(6px, env(safe-area-inset-bottom, 0px))}
+  body[data-page="home"] .music i{height:11px}
 }
