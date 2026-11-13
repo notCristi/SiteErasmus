@@ -221,9 +221,14 @@ html.scrolled .section-nav::before{opacity:1}
 .section-home svg{width:100%;height:100%}
 @media (max-width:860px),(max-aspect-ratio:4/5){
   .section-nav{padding-bottom:4px}
-  .section-nav nav{--section-gap:6px;display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,36px);gap:0 var(--section-gap)}
-  .section-home{grid-column:1;grid-row:1 / 3;align-self:start;width:36px;height:36px}   /* sub el sta butonul de sunet (.music) */
-  .section-link{min-height:36px}
+  /* --row = inaltimea unui rand din meniu; --dot = cat de mari sunt steagul si butonul de sunet (la fel amandoua) */
+  .section-nav{--row:42px;--dot:34px}
+  .section-nav nav{--section-gap:6px;display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,var(--row));gap:0 var(--section-gap)}
+  /* steagul sta la mijlocul primului rand (About), butonul de sunet la mijlocul celui de-al doilea (Journal), amandoua de aceeasi marime.
+     Inelul steagului e subtire, ca marginea butonului de sunet, ca sa arate la fel. */
+  .section-home{grid-column:1;grid-row:1 / 3;align-self:start;width:calc(var(--dot) - 2px);height:calc(var(--dot) - 2px);
+    margin:calc((var(--row) - var(--dot)) / 2 + 1px) 1px 0;box-shadow:0 0 0 1px rgba(255,255,255,.22)}   /* -2px: inelul de 1px e pe dinafara */
+  .section-link{min-height:var(--row)}
   .section-link span{font-size:clamp(16px,4.2vw,24px)}
   .section-link[aria-current="page"] span{letter-spacing:clamp(.1em,.68vw,.46em)}
   .section-nav nav > a:nth-child(3)::after,.section-nav nav > .section-home::after{display:none}
@@ -426,6 +431,7 @@ a.glass.btn:active,button.glass.btn:active{scale:.95}
 @media (prefers-reduced-motion:reduce){.music.on .w,.music.pulse .w{animation:none}.music.on .w{opacity:1}}
 /* telefon, paginile din interior: steagul UE mai mic si mai sus, iar butonul de sunet chiar sub el, in stanga sus */
 @media (max-width:860px),(max-aspect-ratio:4/5){
-  body:not([data-page="home"]) .music{top:calc(var(--nav-top) + 40px);bottom:auto;left:calc(var(--pad) + 2px);width:32px;height:32px}
-  body:not([data-page="home"]) .music svg{width:20px;height:20px}
+  /* aceleasi valori ca .section-nav de mai sus: --row 42px, --dot 34px */
+  body:not([data-page="home"]) .music{top:calc(var(--nav-top) + 42px + (42px - 34px) / 2);bottom:auto;left:var(--pad);width:34px;height:34px}
+  body:not([data-page="home"]) .music svg{width:19px;height:19px}
 }
