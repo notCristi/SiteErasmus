@@ -14,7 +14,7 @@ Video-ul de fundal il ia singur din `../site/media/`, deci nu trebuie copiat nim
 
 Scroll in sus face pasii inapoi (de la coloane la ERASMUS+, de acolo la logo). Click pe steagul din mijlocul coloanelor te duce tot la ERASMUS+.
 
-Intro-ul cu logo si textul care se scrie apar o data la 30 de zile in acelasi browser. Browserul tine minte ziua in care l-ai vazut (in `localStorage`), chiar daca inchizi tab-ul sau calculatorul. Pe alt browser, pe alt telefon sau in modul incognito apare din nou. Ca sa il vezi din nou pe acelasi browser: deschide consola (F12) si scrie `localStorage.clear()`, apoi reincarca pagina. Numarul de zile e `ZILE_INTRO` sus in `assets/js/home.js` (si `30` in scriptul mic din `index.html`, sa fie la fel).
+Intro-ul (logoul, muzica si textul care se scrie) apare o data la 30 de zile in acelasi browser. Conteaza ca vazut cand ajungi la coloane, fie dupa text, fie cu Skip. Dupa aceea, prima pagina se deschide direct cu coloanele. Browserul tine minte ziua (in `localStorage`), chiar daca inchizi tab-ul sau calculatorul. Daca pleci de pe site inainte sa ajungi la coloane, intro-ul apare din nou data viitoare. Pe alt browser, pe alt telefon sau in modul incognito apare din nou. Ca sa il vezi din nou pe acelasi browser: deschide consola (F12) si scrie `localStorage.clear()`, apoi reincarca pagina. Numarul de zile e `ZILE_INTRO` sus in `assets/js/home.js` (si `30` in scriptul mic din `index.html`, sa fie la fel).
 
 Ce schimbi si unde:
 - numele si descrierile din coloane: `index.html`, in `<nav class="cols">`

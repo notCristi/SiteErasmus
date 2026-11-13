@@ -22,8 +22,9 @@ const vazutRecent = key => {
   try { const t = +localStorage.getItem(key); return t > 0 && Date.now() - t < ZILE_INTRO * 864e5; } catch (e) { return false; }
 };
 const marcheaza = key => { try { localStorage.setItem(key, String(Date.now())); } catch (e) {} };
-const store = () => marcheaza('erasmus-intro');
-let textVazut = vazutRecent('erasmus-text');   // textul care se scrie singur, tot o data la 30 de zile
+// Intro-ul conteaza ca vazut abia cand ajungi la coloane (dupa logo si dupa textul care se scrie).
+const introVazut = vazutRecent('erasmus-intro');
+let textVazut = introVazut;
 
 /* ---------- elementele ---------- */
 const hero = $('hero'), logoEl = $('logo'), fx = $('fx'), fctx = fx.getContext('2d');
@@ -195,7 +196,6 @@ function clasa(f) {
 }
 function ajunsHero() {
   faza = 'hero'; clasa('hero');
-  store();
   if (SEQ && !textVazut) SEQ.pregateste();   // fonturile pentru textul care urmeaza
 }
 function mergi(dir) {
@@ -272,7 +272,7 @@ function laColoane(direct) {   // direct = fara zborul steagului (cand ne intoar
   if (faza === 'cols') return;
   if (SEQ) SEQ.stop();
   faza = 'cols'; clasa('cols');
-  textVazut = true; marcheaza('erasmus-text');
+  textVazut = true; marcheaza('erasmus-intro');
   steagJos(reduce || direct === true);
   // cat timp cad coloanele si zboara steagul, mouse-ul nu le largeste (altfel steagul ar ateriza alaturi)
   hero.classList.add('vine'); clearTimeout(vineT); vineT = setTimeout(() => hero.classList.remove('vine'), reduce ? 0 : 1000);
@@ -695,7 +695,14 @@ if ('ResizeObserver' in window) new ResizeObserver(resize).observe(hero);
 resize();
 if (document.fonts) document.fonts.ready.then(resize);
 
-if (window.ERASMUS_SKIP_INTRO) sari();
+// Cine a vazut intro-ul in ultimele 30 de zile intra direct la coloane, fara animatii de intrare.
+function directLaColoane() {
+  hero.classList.add('direct');
+  faza = 'intro'; sari(); laColoane(true); resize();
+  void hero.offsetWidth;
+  requestAnimationFrame(() => requestAnimationFrame(() => hero.classList.remove('direct')));
+}
+if (window.ERASMUS_SKIP_INTRO) { if (introVazut) directLaColoane(); else sari(); }
 else render();
 window.HomeController = {
   suspend() {
@@ -708,10 +715,7 @@ window.HomeController = {
     openingLink = null; columns.inert = false;
     html.classList.remove('opening-section', 'lock');
     // Direct la coloane, fara animatiile de intrare: altfel ERASMUS+ clipeste o clipa si coloanele cad din nou.
-    hero.classList.add('direct');
-    faza = 'intro'; sari(); laColoane(true); resize();
-    void hero.offsetWidth;
-    requestAnimationFrame(() => requestAnimationFrame(() => hero.classList.remove('direct')));
+    directLaColoane();
     return flyFromHeader();
   },
 };
