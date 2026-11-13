@@ -372,6 +372,7 @@ function play() {
     await w(800);
     await sterge(7);
     await w(160);
+    if (!l.isConnected) l = linieNoua();   // pe ecran ingust, randul cu SCHOOLS a disparut la stergere
     await scrie(l, lit('COUNTRIES'));
     await w(1000);
     await stergeTot();
