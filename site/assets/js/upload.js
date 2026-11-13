@@ -5,11 +5,13 @@
    Textele formularului sunt mai jos, in TYPES si in functiile panel...; limitele sunt in LIMIT.
    ========================================================= */
 window.PageControllers = window.PageControllers || {};
+window.UPLOAD_JS_SRC = (document.currentScript && document.currentScript.src) || window.UPLOAD_JS_SRC || new URL('assets/js/upload.js', document.baseURI).href;   // de unde s-a incarcat fisierul acesta
 window.PageControllers.upload = function (signal) {
 const S = window.SITE, U = window.UI, { esc, I } = U;
 const root = document.getElementById('uploadRoot');
 if (!root) return;
 const STORE = 'erasmus-upload', MB = 1024 * 1024;
+const HEIC_SRC = new URL('../vendor/heic-to/heic-to.js', window.UPLOAD_JS_SRC).href;
 const LIMIT = { image: 25 * MB, video: 300 * MB, doc: 100 * MB };
 const PHOTO = { max: 2560, q: 0.9, thumb: 640, thumbQ: 0.8 };   // pozele: latura lunga si calitatea, pentru poza mare si pentru cea mica
 const EXT = { image: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif', 'gif', 'bmp'], video: ['mp4', 'm4v', 'mov', 'webm'], doc: ['pdf', 'ppt', 'pptx', 'pps', 'ppsx', 'doc', 'docx', 'xls', 'xlsx', 'odt', 'ods', 'odp', 'rtf', 'txt', 'csv', 'zip', 'mp3', 'm4a', 'wav', 'ogg'] };
@@ -151,13 +153,34 @@ async function draw(source, w, h, max, q) {
   if (!blob) throw new Error('unreadable');
   return { blob, w: c.width, h: c.height, ext: blob.type === 'image/webp' ? 'webp' : 'jpg' };
 }
-async function readImage(file) {
+// pozele HEIC/HEIF (iPhone) nu pot fi citite de Chrome, Edge sau Firefox: se transforma aici, in browser, in JPG.
+// Biblioteca e mare (3 MB), asa ca se incarca doar cand chiar e nevoie de ea.
+let heicLib = null;
+const loadHeic = () => heicLib || (heicLib = new Promise((res, rej) => {
+  if (window.HeicTo) return res(window.HeicTo);
+  const sc = document.createElement('script');
+  sc.src = HEIC_SRC; sc.onload = () => (window.HeicTo ? res(window.HeicTo) : rej(new Error('unreadable')));
+  sc.onerror = () => { heicLib = null; rej(new Error('unreadable')); };
+  document.head.appendChild(sc);
+}));
+async function heicToJpeg(file) {
+  const HeicTo = await loadHeic();
+  if (!(await HeicTo.isHeic(file))) throw new Error('unreadable');
+  return HeicTo({ blob: file, type: 'image/jpeg', quality: 0.95 });
+}
+async function readBitmap(file) {
   try { const b = await createImageBitmap(file, { imageOrientation: 'from-image' }); return { el: b, w: b.width, h: b.height }; } catch (e) {}
   const url = URL.createObjectURL(file);
   try {
     const img = new Image(); img.src = url; await img.decode();
     return { el: img, w: img.naturalWidth, h: img.naturalHeight };
   } catch (e) { throw new Error('unreadable'); } finally { setTimeout(() => URL.revokeObjectURL(url), 30000); }
+}
+async function readImage(file) {
+  try { return await readBitmap(file); } catch (e) {}
+  let jpg;
+  try { jpg = await heicToJpeg(file); } catch (e) { throw new Error('unreadable'); }
+  return readBitmap(jpg);
 }
 async function shrink(file) {
   const im = await readImage(file);
