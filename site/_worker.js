@@ -12,8 +12,14 @@
 const MB = 1024 * 1024;
 const MAX = { image: 25 * MB, video: 300 * MB, doc: 100 * MB };   // marimea maxima a unui fisier
 const PART = 20 * MB;                                            // fisierele mari urca in bucati de atat
-const DAY_BYTES = 10 * 1024 * MB;                                // cat poate urca un dispozitiv in 24 de ore
-const DAY_BYTES_KEY = 40 * 1024 * MB;                            // ...si cat pot urca, impreuna, toti cei cu aceeasi parola
+const DAY_BYTES = 600 * MB;                                      // cat poate urca un dispozitiv in 24 de ore
+const DAY_BYTES_KEY = 2500 * MB;                                 // ...si cat pot urca, impreuna, toti cei cu aceeasi parola
+const MAX_TOTAL_BYTES = Math.round(8.5 * 1024 * MB);             // plafon global in R2 (sub limita gratuita de 10 GB)
+const ADMIN_IDLE_MS = 24 * 3600 * 1000;                          // sesiunea de admin expira dupa 24h de inactivitate
+const ADMIN_MAX_MS = 7 * 24 * 3600 * 1000;                       // ...sau la 7 zile de la autentificare
+const USER_MAX_MS = 30 * 24 * 3600 * 1000;                       // sesiunile elevi/profesori expira la 30 de zile
+const TRASH_DAYS_MS = 7 * 24 * 3600 * 1000;                      // postarile ascunse se sterg definitiv dupa 7 zile
+const ORPHAN_MS = 24 * 3600 * 1000;                              // fisierele nepublicate/intrerupte se curata dupa 24h
 const FILES = {
   jpg: ['image/jpeg', 'image'], jpeg: ['image/jpeg', 'image'], png: ['image/png', 'image'], webp: ['image/webp', 'image'],
   mp4: ['video/mp4', 'video'], m4v: ['video/mp4', 'video'], mov: ['video/quicktime', 'video'], webm: ['video/webm', 'video'],
@@ -24,11 +30,12 @@ const FILES = {
 const MOBS = ['ro', 'fr', 'dk'];
 const STAFF_TYPES = ['info', 'day', 'stop'];        // doar profesorii si adminul: inlocuiesc un text care exista deja
 const TYPES = ['media', 'story', 'material', 'result', 'link', ...STAFF_TYPES];
-const TRIES = 8, TRY_WINDOW = 15 * 60 * 1000;       // 8 parole gresite de pe aceeasi adresa = pauza 15 minute
+const TRIES = 8, GLOBAL_TRIES = 30, TRY_WINDOW = 15 * 60 * 1000;   // 8 incercari pe IP / 30 global in 15 minute
 
 const SCHEMA = [
-  `CREATE TABLE IF NOT EXISTS keys (id TEXT PRIMARY KEY, label TEXT NOT NULL, role TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS keys (id TEXT PRIMARY KEY, label TEXT NOT NULL, role TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, locked INTEGER NOT NULL DEFAULT 0, max_devices INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL DEFAULT 0, quota_mb INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, key_id TEXT, role TEXT NOT NULL, name TEXT NOT NULL, adm TEXT, created INTEGER NOT NULL, seen INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS devices_key ON devices (key_id)`,
   `CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, type TEXT NOT NULL, mob TEXT NOT NULL, skey TEXT, data TEXT NOT NULL, device_id TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
   `CREATE INDEX IF NOT EXISTS items_live ON items (deleted, created)`,
   `CREATE INDEX IF NOT EXISTS items_device ON items (device_id, deleted)`,
@@ -36,10 +43,20 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS files_device ON files (device_id, created)`,
   `CREATE TABLE IF NOT EXISTS attempts (ip TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS attempts_ip ON attempts (ip, ts)`,
+  `CREATE INDEX IF NOT EXISTS attempts_ts ON attempts (ts)`,
 ];
-let schemaReady = null;
+const MIGRATIONS = [
+  `ALTER TABLE keys ADD COLUMN locked INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE keys ADD COLUMN max_devices INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE keys ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE keys ADD COLUMN quota_mb INTEGER NOT NULL DEFAULT 0`,
+];
+let schemaReady = null, lastCleanup = 0;
 function ready(env) {
-  if (!schemaReady) schemaReady = env.DB.batch(SCHEMA.map(q => env.DB.prepare(q))).catch(e => { schemaReady = null; throw e; });
+  if (!schemaReady) schemaReady = (async () => {
+    await env.DB.batch(SCHEMA.map(q => env.DB.prepare(q)));
+    for (const q of MIGRATIONS) await env.DB.prepare(q).run().catch(() => {});
+  })().catch(e => { schemaReady = null; throw e; });
   return schemaReady;
 }
 
@@ -48,7 +65,20 @@ class Bad extends Error { constructor(code, status = 400) { super(code); this.co
 const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
 const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
 const rand = bytes => hex(crypto.getRandomValues(new Uint8Array(bytes)));
-const sha256 = async text => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+const enc = text => new TextEncoder().encode(String(text ?? ''));
+const sha256 = async text => hex(await crypto.subtle.digest('SHA-256', enc(text)));
+// comparare in timp constant pe doua digest-uri SHA-256 de 32 de octeti
+async function same(a, b) {
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc(a)),
+    crypto.subtle.digest('SHA-256', enc(b)),
+  ]);
+  if (typeof crypto.subtle.timingSafeEqual === 'function') return crypto.subtle.timingSafeEqual(ha, hb);
+  const ua = new Uint8Array(ha), ub = new Uint8Array(hb);
+  let diff = 0;
+  for (let i = 0; i < ua.length; i++) diff |= ua[i] ^ ub[i];
+  return diff === 0;
+}
 const adminHash = env => sha256('erasmus-admin:' + env.ADMIN_KEY);
 const adminOn = env => typeof env.ADMIN_KEY === 'string' && env.ADMIN_KEY.length >= 10;
 const staff = dev => dev.role === 'admin' || dev.role === 'teacher';
@@ -75,44 +105,126 @@ async function auth(request, env) {
   const m = /^Bearer ([a-f0-9]{64})$/.exec(request.headers.get('authorization') || '');
   if (!m) return null;
   const dev = await env.DB.prepare(
-    `SELECT d.id, d.key_id, d.role, d.name, d.adm, d.seen, k.active AS k_active, k.label AS k_label
+    `SELECT d.id, d.key_id, d.role, d.name, d.adm, d.created, d.seen,
+            k.active AS k_active, k.label AS k_label, k.expires_at AS k_expires
      FROM devices d LEFT JOIN keys k ON k.id = d.key_id WHERE d.token_hash = ?`).bind(await sha256(m[1])).first();
   if (!dev) return null;
-  if (dev.role === 'admin') { if (!adminOn(env) || dev.adm !== await adminHash(env)) return null; }   // parola de admin schimbata = toti adminii ies
-  else if (!dev.k_active) return null;                                                                 // parola anulata = toti cei cu ea ies
-  if (Date.now() - dev.seen > 6 * 3600 * 1000) await env.DB.prepare('UPDATE devices SET seen = ? WHERE id = ?').bind(Date.now(), dev.id).run();
+  const now = Date.now();
+  if (dev.role === 'admin') {
+    if (!adminOn(env) || !(await same(dev.adm || '', await adminHash(env)))) return null;   // parola de admin schimbata = toti adminii ies
+    if (now - dev.seen > ADMIN_IDLE_MS || now - dev.created > ADMIN_MAX_MS) return null;
+  } else {
+    if (!dev.k_active) return null;                                                          // parola anulata = toti cei cu ea ies
+    if (dev.k_expires > 0 && now > dev.k_expires) return null;
+    if (now - dev.created > USER_MAX_MS) return null;
+  }
+  if (now - dev.seen > 15 * 60 * 1000) await env.DB.prepare('UPDATE devices SET seen = ? WHERE id = ?').bind(now, dev.id).run();
   return dev;
 }
 const me = dev => ({ id: dev.id, role: dev.role, name: dev.name, label: dev.role === 'admin' ? 'Admin' : dev.k_label });
 
-async function login(request, env) {
+async function login(request, env, ctx) {
   const ip = request.headers.get('cf-connecting-ip') || 'local', now = Date.now();
-  const fails = await env.DB.prepare('SELECT COUNT(*) AS n FROM attempts WHERE ip = ? AND ts > ?').bind(ip, now - TRY_WINDOW).first('n');
-  if (fails >= TRIES) throw new Bad('too_many_tries', 429);
+  const [ipFails, globalFails] = await Promise.all([
+    env.DB.prepare('SELECT COUNT(*) AS n FROM attempts WHERE ip = ? AND ts > ?').bind(ip, now - TRY_WINDOW).first('n'),
+    env.DB.prepare('SELECT COUNT(*) AS n FROM attempts WHERE ts > ?').bind(now - TRY_WINDOW).first('n'),
+  ]);
+  if (ipFails >= TRIES || globalFails >= GLOBAL_TRIES) throw new Bad('too_many_tries', 429);
   const b = await body(request, 2000);
   const key = typeof b.key === 'string' ? b.key.trim().slice(0, 200) : '';
   const name = str(b.name, 60);
   if (!key || name.length < 2) throw new Bad('missing_field');
-  let role = '', keyId = null, label = 'Admin', adm = null;
-  if (adminOn(env) && await sha256('cmp:' + key) === await sha256('cmp:' + env.ADMIN_KEY)) { role = 'admin'; adm = await adminHash(env); }
-  else {
-    const { results } = await env.DB.prepare('SELECT id, label, role, salt, hash FROM keys WHERE active = 1').all();
-    for (const k of results) if (await sha256(k.salt + ':' + key) === k.hash) { role = k.role; keyId = k.id; label = k.label; break; }
+  let role = '', keyId = null, label = 'Admin', adm = null, matchedKey = null;
+  if (adminOn(env) && await same('cmp:' + key, 'cmp:' + env.ADMIN_KEY)) {
+    role = 'admin'; adm = await adminHash(env);
+  } else {
+    const { results } = await env.DB.prepare('SELECT id, label, role, salt, hash, locked, max_devices, expires_at FROM keys WHERE active = 1').all();
+    for (const k of results) {
+      if (await same(await sha256(k.salt + ':' + key), k.hash)) { matchedKey = k; break; }
+    }
   }
-  if (!role) {
+  if (!role && !matchedKey) {
     await env.DB.batch([
       env.DB.prepare('INSERT INTO attempts (ip, ts) VALUES (?, ?)').bind(ip, now),
       env.DB.prepare('DELETE FROM attempts WHERE ts < ?').bind(now - 24 * 3600 * 1000),
     ]);
     throw new Bad('wrong_key', 401);
   }
-  const token = rand(32), id = rand(8);
-  await env.DB.prepare('INSERT INTO devices (id, token_hash, key_id, role, name, adm, created, seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(id, await sha256(token), keyId, role, name, adm, now, now).run();
+  if (matchedKey) {
+    if (matchedKey.expires_at > 0 && now > matchedKey.expires_at) throw new Bad('key_expired', 403);
+    if (matchedKey.locked) throw new Bad('key_locked', 403);
+    role = matchedKey.role; keyId = matchedKey.id; label = matchedKey.label;
+  }
+  const token = rand(32), id = rand(8), tokHash = await sha256(token);
+  if (matchedKey && matchedKey.max_devices > 0) {
+    // verificare atomica a limitei de dispozitive intr-o singura interogare SQL
+    const ins = await env.DB.prepare(
+      `INSERT INTO devices (id, token_hash, key_id, role, name, adm, created, seen)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?
+       WHERE (SELECT COUNT(*) FROM devices WHERE key_id = ? AND token_hash NOT LIKE 'out:%') < ?`)
+      .bind(id, tokHash, keyId, role, name, adm, now, now, keyId, matchedKey.max_devices).run();
+    if (!ins.meta.changes) throw new Bad('device_limit', 403);
+  } else {
+    await env.DB.prepare('INSERT INTO devices (id, token_hash, key_id, role, name, adm, created, seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, tokHash, keyId, role, name, adm, now, now).run();
+  }
+  maybeCleanup(env, ctx);
   return json({ token, me: { id, role, name, label } });
 }
 
+/* ---------- curatare automata fara Cron Trigger (ruleaza cel mult o data pe ora) ---------- */
+function maybeCleanup(env, ctx) {
+  const now = Date.now();
+  if (now - lastCleanup < 3600 * 1000) return;
+  lastCleanup = now;
+  ctx.waitUntil(cleanup(env).catch(() => {}));
+}
+async function cleanup(env) {
+  const now = Date.now();
+  // 1. upload-uri multipart neterminate mai vechi de 24h
+  const { results: pendingParts } = await env.DB.prepare(
+    'SELECT key, upload_id FROM files WHERE upload_id IS NOT NULL AND created < ? LIMIT 50').bind(now - ORPHAN_MS).all();
+  for (const r of pendingParts) {
+    await env.MEDIA.resumeMultipartUpload(r.key, r.upload_id).abort().catch(() => {});
+    await env.DB.prepare('DELETE FROM files WHERE key = ?').bind(r.key).run();
+  }
+  // 2. postari din Trash mai vechi de 7 zile -> sterse definitiv din R2 si D1
+  const { results: expiredTrash } = await env.DB.prepare(
+    'SELECT id, data FROM items WHERE deleted = 1 AND updated < ? LIMIT 50').bind(now - TRASH_DAYS_MS).all();
+  for (const r of expiredTrash) {
+    let keys = [];
+    try { keys = itemKeys(JSON.parse(r.data)); } catch (e) {}
+    await dropFiles(env, keys);
+    await env.DB.prepare('DELETE FROM items WHERE id = ?').bind(r.id).run();
+  }
+  // 3. fisiere finalizate mai vechi de 24h neasociate niciunei postari
+  const { results: oldFiles } = await env.DB.prepare(
+    'SELECT key FROM files WHERE upload_id IS NULL AND created < ? LIMIT 100').bind(now - ORPHAN_MS).all();
+  if (oldFiles.length) {
+    const { results: allItems } = await env.DB.prepare('SELECT data FROM items').all();
+    const used = new Set();
+    for (const it of allItems) {
+      try { for (const k of itemKeys(JSON.parse(it.data))) used.add(k); } catch (e) {}
+    }
+    const orphans = oldFiles.map(f => f.key).filter(k => !used.has(k));
+    if (orphans.length) await dropFiles(env, orphans);
+  }
+}
+
 /* ---------- fisierele (R2) ---------- */
+const seqMatch = (bytes, sig, offset = 0) => bytes.length >= offset + sig.length && sig.every((v, i) => bytes[offset + i] === v);
+const asciiAt = (bytes, offset, len) => bytes.length >= offset + len ? String.fromCharCode(...bytes.slice(offset, offset + len)) : '';
+function checkMagic(bytes, e) {
+  if (e === 'jpg' || e === 'jpeg') return seqMatch(bytes, [0xFF, 0xD8, 0xFF]);
+  if (e === 'png') return seqMatch(bytes, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+  if (e === 'webp') return asciiAt(bytes, 0, 4) === 'RIFF' && asciiAt(bytes, 8, 4) === 'WEBP';
+  if (e === 'pdf') return asciiAt(bytes, 0, 5) === '%PDF-';
+  if (e === 'docx' || e === 'pptx') return seqMatch(bytes, [0x50, 0x4B, 0x03, 0x04]);
+  if (e === 'doc' || e === 'ppt') return seqMatch(bytes, [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
+  if (e === 'mp4' || e === 'm4v' || e === 'mov') return ['ftyp', 'moov', 'wide', 'mdat', 'free', 'skip', 'pnot'].includes(asciiAt(bytes, 4, 4));
+  if (e === 'webm') return seqMatch(bytes, [0x1A, 0x45, 0xDF, 0xA3]);
+  return false;
+}
 function describe(url) {
   const name = str(url.searchParams.get('name'), 120), e = ext(name), def = FILES[e];
   const size = Number(url.searchParams.get('size'));
@@ -120,25 +232,39 @@ function describe(url) {
   if (!(size > 0)) throw new Bad('bad_size');
   if (size > MAX[def[1]]) throw new Bad('file_too_big', 413);
   const d = new Date();
-  return { name, size, type: def[0], cls: def[1], key: `${def[1]}/${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}/${rand(12)}.${e}` };
+  return { name, size, ext: e, type: def[0], cls: def[1], key: `${def[1]}/${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}/${rand(12)}.${e}` };
 }
 const r2meta = f => ({ httpMetadata: { contentType: f.type }, customMetadata: { name: f.name } });
 async function quota(env, dev, size) {
-  const used = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM files WHERE device_id = ? AND created > ?').bind(dev.id, Date.now() - 24 * 3600 * 1000).first('n');
-  if (used + size > DAY_BYTES) throw new Bad('daily_limit', 429);
+  const total = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM files').first('n');
+  if (total + size > MAX_TOTAL_BYTES) throw new Bad('storage_full', 429);
+  if (dev.role !== 'admin') {
+    const used = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM files WHERE device_id = ? AND created > ?').bind(dev.id, Date.now() - 24 * 3600 * 1000).first('n');
+    if (used + size > DAY_BYTES) throw new Bad('daily_limit', 429);
+  }
   if (dev.key_id) {
-    const all = await env.DB.prepare('SELECT COALESCE(SUM(f.size), 0) AS n FROM files f JOIN devices d ON d.id = f.device_id WHERE d.key_id = ? AND f.created > ?').bind(dev.key_id, Date.now() - 24 * 3600 * 1000).first('n');
-    if (all + size > DAY_BYTES_KEY) throw new Bad('daily_limit', 429);
+    const dayKey = await env.DB.prepare('SELECT COALESCE(SUM(f.size), 0) AS n FROM files f JOIN devices d ON d.id = f.device_id WHERE d.key_id = ? AND f.created > ?').bind(dev.key_id, Date.now() - 24 * 3600 * 1000).first('n');
+    if (dayKey + size > DAY_BYTES_KEY) throw new Bad('daily_limit', 429);
+    const kRow = await env.DB.prepare('SELECT quota_mb FROM keys WHERE id = ?').bind(dev.key_id).first();
+    if (kRow && kRow.quota_mb > 0) {
+      const totalKey = await env.DB.prepare('SELECT COALESCE(SUM(f.size), 0) AS n FROM files f JOIN devices d ON d.id = f.device_id WHERE d.key_id = ?').bind(dev.key_id).first('n');
+      if (totalKey + size > kRow.quota_mb * MB) throw new Bad('key_quota', 429);
+    }
   }
 }
 async function putFile(request, env, dev, url) {
   const f = describe(url);
   if (f.size > 95 * MB) throw new Bad('use_parts', 413);
+  if (Number(request.headers.get('content-length')) > 95 * MB) throw new Bad('use_parts', 413);
   await quota(env, dev, f.size);
-  const obj = await env.MEDIA.put(f.key, request.body, r2meta(f));
-  if (obj.size > MAX[f.cls]) { await env.MEDIA.delete(f.key); throw new Bad('file_too_big', 413); }
-  await env.DB.prepare('INSERT INTO files (key, device_id, size, cls, name, created) VALUES (?, ?, ?, ?, ?, ?)').bind(f.key, dev.id, obj.size, f.cls, f.name, Date.now()).run();
-  return json({ key: f.key, size: obj.size });
+  const buf = await request.arrayBuffer();
+  if (!buf.byteLength) throw new Bad('bad_size');
+  if (buf.byteLength > MAX[f.cls] || buf.byteLength > 95 * MB) throw new Bad('file_too_big', 413);
+  if (buf.byteLength > f.size) await quota(env, dev, buf.byteLength);
+  if (!checkMagic(new Uint8Array(buf, 0, Math.min(32, buf.byteLength)), f.ext)) throw new Bad('file_type');
+  await env.MEDIA.put(f.key, buf, r2meta(f));
+  await env.DB.prepare('INSERT INTO files (key, device_id, size, cls, name, created) VALUES (?, ?, ?, ?, ?, ?)').bind(f.key, dev.id, buf.byteLength, f.cls, f.name, Date.now()).run();
+  return json({ key: f.key, size: buf.byteLength });
 }
 async function partsStart(env, dev, url) {
   const f = describe(url);
@@ -158,7 +284,19 @@ async function partsPut(request, env, dev, url) {
   const n = Number(url.searchParams.get('n'));
   if (!Number.isInteger(n) || n < 1 || n > Math.ceil(MAX[row.cls] / PART) + 1) throw new Bad('bad_part');
   if (Number(request.headers.get('content-length')) > PART + MB) throw new Bad('part_too_big', 413);
-  const part = await up.uploadPart(n, request.body);
+  let bodyData = request.body;
+  if (n === 1) {
+    const buf = await request.arrayBuffer();
+    if (!buf.byteLength) throw new Bad('bad_part');
+    if (buf.byteLength > PART + MB) throw new Bad('part_too_big', 413);
+    if (!checkMagic(new Uint8Array(buf, 0, Math.min(32, buf.byteLength)), ext(row.key))) {
+      await up.abort().catch(() => {});
+      await env.DB.prepare('DELETE FROM files WHERE key = ?').bind(row.key).run();
+      throw new Bad('file_type');
+    }
+    bodyData = buf;
+  }
+  const part = await up.uploadPart(n, bodyData);
   return json({ partNumber: part.partNumber, etag: part.etag });
 }
 async function partsDone(request, env, dev, url) {
@@ -170,6 +308,10 @@ async function partsDone(request, env, dev, url) {
   if (obj.size > MAX[row.cls]) {
     await env.MEDIA.delete(row.key); await env.DB.prepare('DELETE FROM files WHERE key = ?').bind(row.key).run();
     throw new Bad('file_too_big', 413);
+  }
+  if (obj.size > row.size) {
+    try { await quota(env, dev, obj.size - row.size); }
+    catch (e) { await env.MEDIA.delete(row.key); await env.DB.prepare('DELETE FROM files WHERE key = ?').bind(row.key).run(); throw e; }
   }
   await env.DB.prepare('UPDATE files SET upload_id = NULL, size = ? WHERE key = ?').bind(obj.size, row.key).run();
   return json({ key: row.key, size: obj.size });
@@ -197,6 +339,7 @@ async function media(request, env, key) {
   h.set('cache-control', 'public, max-age=31536000, immutable');
   h.set('accept-ranges', 'bytes');
   h.set('x-content-type-options', 'nosniff');
+  h.set('content-security-policy', "default-src 'none'; sandbox");
   const type = (FILES[ext(key)] || [])[0] || 'application/octet-stream';
   h.set('content-type', type);
   if (key.startsWith('doc/')) {   // PDF-ul se deschide in pagina; PowerPoint si Word se descarca, cu numele lor
@@ -283,12 +426,8 @@ async function createItem(request, env, ctx, dev) {
     if (results.length !== new Set(keys).size || results.some(r => r.device_id !== dev.id)) throw new Bad('unknown_file');
   }
   const now = Date.now(), id = rand(8);
-  if (skey) {   // un singur text / fisier de felul asta pe mobilitate: cel vechi iese
-    const { results } = await env.DB.prepare('SELECT id, data FROM items WHERE deleted = 0 AND type = ? AND mob = ? AND skey = ?').bind(type, mob, skey).all();
-    for (const r of results) {
-      await env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE id = ?').bind(now, r.id).run();
-      await dropFiles(env, itemKeys(JSON.parse(r.data)));
-    }
+  if (skey) {   // un singur text / fisier de felul asta pe mobilitate: cel vechi trece in Trash
+    await env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE deleted = 0 AND type = ? AND mob = ? AND skey = ?').bind(now, type, mob, skey).run();
   }
   await env.DB.prepare('INSERT INTO items (id, type, mob, skey, data, device_id, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(id, type, mob, skey, JSON.stringify(data), dev.id, now, now).run();
@@ -310,10 +449,31 @@ async function editItem(request, env, ctx, dev, id) {
   purge(ctx, request);
   return json({ id, type: row.type, mob, t: row.created, ...data });
 }
-async function deleteItem(request, env, ctx, dev, id) {
-  const row = await ownItem(env, dev, id);
+async function deleteItem(request, env, ctx, dev, id, url) {
+  if (!/^[a-f0-9]{16}$/.test(id)) throw new Bad('not_found', 404);
+  if (dev.role === 'admin' && url.searchParams.get('permanent') === '1') {
+    const row = await env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(id).first();
+    if (!row) throw new Bad('not_found', 404);
+    await dropFiles(env, itemKeys(JSON.parse(row.data)));
+    await env.DB.prepare('DELETE FROM items WHERE id = ?').bind(id).run();
+    purge(ctx, request);
+    return json({ ok: true, permanent: true });
+  }
+  await ownItem(env, dev, id);
   await env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE id = ?').bind(Date.now(), id).run();
-  await dropFiles(env, itemKeys(JSON.parse(row.data)));
+  purge(ctx, request);
+  return json({ ok: true });
+}
+async function restoreItem(request, env, ctx, dev, id) {
+  if (!staff(dev)) throw new Bad('not_allowed', 403);
+  const row = /^[a-f0-9]{16}$/.test(id) && await env.DB.prepare('SELECT * FROM items WHERE id = ? AND deleted = 1').bind(id).first();
+  if (!row) throw new Bad('not_found', 404);
+  const now = Date.now();
+  if (row.skey) {
+    await env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE deleted = 0 AND type = ? AND mob = ? AND skey = ?')
+      .bind(now, row.type, row.mob, row.skey).run();
+  }
+  await env.DB.prepare('UPDATE items SET deleted = 0, updated = ? WHERE id = ?').bind(now, id).run();
   purge(ctx, request);
   return json({ ok: true });
 }
@@ -333,44 +493,129 @@ async function content(request, env, ctx, asScript) {
     ? new Response(`window.CLOUD=${items.replace(/</g, '\\u003c').replace(/[\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16))};`, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' } })
     : new Response(items, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 }
-// lista din UPLOAD: ale tale; profesorii si adminul le vad pe toate; doar adminul vede si cine le-a urcat
+// lista din UPLOAD: ale tale; profesorii si adminul le vad pe toate; doar adminul vede cine le-a urcat si Trash
 async function mine(env, dev) {
   const q = staff(dev)
-    ? env.DB.prepare(`SELECT i.*, d.name AS by_name, k.label AS by_label FROM items i LEFT JOIN devices d ON d.id = i.device_id LEFT JOIN keys k ON k.id = d.key_id WHERE i.deleted = 0 ORDER BY i.created DESC LIMIT 400`)
+    ? env.DB.prepare(`SELECT i.*, d.name AS by_name, d.key_id AS by_key_id, k.label AS by_label FROM items i LEFT JOIN devices d ON d.id = i.device_id LEFT JOIN keys k ON k.id = d.key_id WHERE i.deleted = 0 ORDER BY i.created DESC LIMIT 400`)
     : env.DB.prepare('SELECT * FROM items WHERE deleted = 0 AND device_id = ? ORDER BY created DESC LIMIT 400').bind(dev.id);
   const { results } = await q.all();
-  return json({ items: results.map(r => ({ ...pub(r), own: r.device_id === dev.id,
-    ...(dev.role === 'admin' ? { uploader: r.device_id === dev.id ? 'You' : `${r.by_name || '?'} · ${r.by_label || 'Admin'}` } : {}) })) });
+  const mapRow = r => ({
+    ...pub(r),
+    own: r.device_id === dev.id,
+    ...(dev.role === 'admin' ? {
+      uploader: r.device_id === dev.id ? 'You' : `${r.by_name || '?'} · ${r.by_label || (r.by_key_id ? 'Deleted key' : 'Admin')}`,
+      byKey: r.by_key_id || 'admin',
+      byDevice: r.device_id,
+    } : {}),
+  });
+  const out = { items: results.map(mapRow) };
+  if (dev.role === 'admin') {
+    const [tr, used] = await Promise.all([
+      env.DB.prepare(`SELECT i.*, d.name AS by_name, d.key_id AS by_key_id, k.label AS by_label FROM items i LEFT JOIN devices d ON d.id = i.device_id LEFT JOIN keys k ON k.id = d.key_id WHERE i.deleted = 1 ORDER BY i.updated DESC LIMIT 200`).all(),
+      env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM files').first('n'),
+    ]);
+    out.trash = tr.results.map(r => ({ ...mapRow(r), deletedAt: r.updated }));
+    out.storage = { usedBytes: used || 0, maxBytes: MAX_TOTAL_BYTES };
+  }
+  return json(out);
 }
 
-/* ---------- adminul: parolele ---------- */
+/* ---------- adminul: parolele si dispozitivele ---------- */
 async function adminKeys(env) {
-  const { results } = await env.DB.prepare(
-    `SELECT k.id, k.label, k.role, k.active, k.created, (SELECT COUNT(*) FROM devices d WHERE d.key_id = k.id) AS devices,
-       (SELECT GROUP_CONCAT(name, ', ') FROM (SELECT DISTINCT name FROM devices d WHERE d.key_id = k.id LIMIT 40)) AS names
-     FROM keys k ORDER BY k.created DESC`).all();
-  return json({ keys: results });
+  const [ks, ds] = await Promise.all([
+    env.DB.prepare(
+      `SELECT k.id, k.label, k.role, k.active, k.locked, k.max_devices, k.expires_at, k.quota_mb, k.created,
+         (SELECT COUNT(*) FROM devices d WHERE d.key_id = k.id AND d.token_hash NOT LIKE 'out:%') AS devices,
+         (SELECT COALESCE(SUM(f.size), 0) FROM files f JOIN devices d ON d.id = f.device_id WHERE d.key_id = k.id) AS used_bytes
+       FROM keys k ORDER BY k.created DESC`).all(),
+    env.DB.prepare(
+      `SELECT d.id, d.key_id, d.name, d.created, d.seen,
+         CASE WHEN d.token_hash LIKE 'out:%' THEN 0 ELSE 1 END AS online,
+         (SELECT COUNT(*) FROM items i WHERE i.device_id = d.id AND i.deleted = 0) AS uploads
+       FROM devices d WHERE d.key_id IS NOT NULL ORDER BY online DESC, d.seen DESC LIMIT 500`).all(),
+  ]);
+  const byKey = new Map();
+  for (const d of ds.results) {
+    if (!byKey.has(d.key_id)) byKey.set(d.key_id, []);
+    byKey.get(d.key_id).push({ id: d.id, name: d.name, created: d.created, seen: d.seen, online: !!d.online, uploads: d.uploads });
+  }
+  return json({ keys: ks.results.map(k => ({ ...k, deviceList: byKey.get(k.id) || [] })) });
 }
 async function adminNewKey(request, env) {
   const b = await body(request, 2000);
   const label = str(b.label, 60, { req: true }), role = b.role === 'teacher' ? 'teacher' : 'student';
+  const maxDevices = int(b.max_devices, 0, 500, 0);
+  const expiresDays = int(b.expires_days, 0, 365, 0);
+  const expiresAt = expiresDays > 0 ? Date.now() + expiresDays * 24 * 3600 * 1000 : 0;
+  const quotaMb = int(b.quota_mb, 0, 8000, 0);
   let key = typeof b.key === 'string' ? b.key.trim() : '';
   if (key && key.length < 8) throw new Bad('key_too_short');
-  if (!key) {   // o parola usor de dictat: ELEVI-7F3K-Q2M9
+  if (!key) {   // o parola usor de dictat: ELEV-7F3K-Q2M9-...
     const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', pick = n => [...crypto.getRandomValues(new Uint8Array(n))].map(x => abc[x % 32]).join('');
     key = `${role === 'teacher' ? 'PROF' : 'ELEV'}-${pick(4)}-${pick(4)}-${pick(4)}`;
   }
-  if (adminOn(env) && key === env.ADMIN_KEY) throw new Bad('key_taken');
+  if (adminOn(env) && await same('cmp:' + key, 'cmp:' + env.ADMIN_KEY)) throw new Bad('key_taken');
   const { results } = await env.DB.prepare('SELECT salt, hash FROM keys').all();
-  for (const k of results) if (await sha256(k.salt + ':' + key) === k.hash) throw new Bad('key_taken');
-  const salt = rand(8), id = rand(6);
-  await env.DB.prepare('INSERT INTO keys (id, label, role, salt, hash, active, created) VALUES (?, ?, ?, ?, ?, 1, ?)').bind(id, label, role, salt, await sha256(salt + ':' + key), Date.now()).run();
+  for (const k of results) if (await same(await sha256(k.salt + ':' + key), k.hash)) throw new Bad('key_taken');
+  const salt = rand(8), id = rand(6), created = Date.now();
+  await env.DB.prepare(
+    'INSERT INTO keys (id, label, role, salt, hash, active, locked, max_devices, expires_at, quota_mb, created) VALUES (?, ?, ?, ?, ?, 1, 0, ?, ?, ?, ?)')
+    .bind(id, label, role, salt, await sha256(salt + ':' + key), maxDevices, expiresAt, quotaMb, created).run();
   return json({ id, label, role, key });   // parola se vede o singura data, acum
 }
 async function adminSetKey(request, env, id) {
-  const b = await body(request, 500);
-  const r = await env.DB.prepare('UPDATE keys SET active = ? WHERE id = ?').bind(b.active ? 1 : 0, id).run();
-  if (!r.meta.changes) throw new Bad('not_found', 404);
+  const row = await env.DB.prepare('SELECT id, active, locked, max_devices, expires_at, quota_mb FROM keys WHERE id = ?').bind(id).first();
+  if (!row) throw new Bad('not_found', 404);
+  const b = await body(request, 1000);
+  const active = 'active' in b ? (b.active ? 1 : 0) : row.active;
+  const locked = 'locked' in b ? (b.locked ? 1 : 0) : row.locked;
+  const maxDevices = 'max_devices' in b ? int(b.max_devices, 0, 500, row.max_devices) : row.max_devices;
+  const quotaMb = 'quota_mb' in b ? int(b.quota_mb, 0, 8000, row.quota_mb) : row.quota_mb;
+  let expiresAt = row.expires_at;
+  if ('expires_days' in b) {
+    const days = int(b.expires_days, 0, 365, -1);
+    if (days === 0) expiresAt = 0;
+    else if (days > 0) expiresAt = Date.now() + days * 24 * 3600 * 1000;
+  } else if ('expires_at' in b && Number.isInteger(b.expires_at) && b.expires_at >= 0) {
+    expiresAt = b.expires_at;
+  }
+  await env.DB.prepare('UPDATE keys SET active = ?, locked = ?, max_devices = ?, expires_at = ?, quota_mb = ? WHERE id = ?')
+    .bind(active, locked, maxDevices, expiresAt, quotaMb, id).run();
+  return json({ ok: true });
+}
+async function adminDeleteKey(request, env, ctx, id, url) {
+  const row = await env.DB.prepare('SELECT id FROM keys WHERE id = ?').bind(id).first();
+  if (!row) throw new Bad('not_found', 404);
+  const hideUploads = url.searchParams.get('hide_uploads') === '1';
+  const now = Date.now();
+  const { results: devs } = await env.DB.prepare('SELECT id FROM devices WHERE key_id = ?').bind(id).all();
+  const stmts = devs.map(d => env.DB.prepare('UPDATE devices SET token_hash = ? WHERE id = ?').bind('out:' + rand(16), d.id));
+  if (hideUploads && devs.length) {
+    for (const d of devs) {
+      stmts.push(env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE device_id = ? AND deleted = 0').bind(now, d.id));
+    }
+  }
+  stmts.push(env.DB.prepare('DELETE FROM keys WHERE id = ?').bind(id));
+  await env.DB.batch(stmts);
+  if (hideUploads) purge(ctx, request);
+  return json({ ok: true });
+}
+async function adminKickDevice(request, env, ctx, id) {
+  if (!/^[a-f0-9]{16}$/.test(id)) throw new Bad('not_found', 404);
+  const dev = await env.DB.prepare('SELECT id, key_id FROM devices WHERE id = ?').bind(id).first();
+  if (!dev) throw new Bad('not_found', 404);
+  const b = await body(request, 500).catch(() => ({}));
+  const stmts = [
+    env.DB.prepare('UPDATE devices SET token_hash = ? WHERE id = ?').bind('out:' + rand(16), id),
+  ];
+  if (b.lockKey && dev.key_id) {
+    stmts.push(env.DB.prepare('UPDATE keys SET locked = 1 WHERE id = ?').bind(dev.key_id));
+  }
+  if (b.hideUploads) {
+    stmts.push(env.DB.prepare('UPDATE items SET deleted = 1, updated = ? WHERE device_id = ? AND deleted = 0').bind(Date.now(), id));
+  }
+  await env.DB.batch(stmts);
+  if (b.hideUploads) purge(ctx, request);
   return json({ ok: true });
 }
 
@@ -388,9 +633,10 @@ async function api(request, env, ctx, url) {
   const origin = request.headers.get('origin');
   if (method !== 'GET' && origin && origin !== url.origin) throw new Bad('not_allowed', 403);
   await ready(env);
-  if (path === '/api/login' && method === 'POST') return login(request, env);
+  if (path === '/api/login' && method === 'POST') return login(request, env, ctx);
   const dev = await auth(request, env);
   if (!dev) throw new Bad('signed_out', 401);
+  maybeCleanup(env, ctx);
   if (path === '/api/me' && method === 'GET') return json({ me: me(dev) });
   if (path === '/api/logout' && method === 'POST') {   // codul de acces moare, dar randul ramane: se stie in continuare cine a urcat ce
     await env.DB.prepare('UPDATE devices SET token_hash = ? WHERE id = ?').bind('out:' + rand(16), dev.id).run();
@@ -400,7 +646,9 @@ async function api(request, env, ctx, url) {
   if (path === '/api/items' && method === 'POST') return createItem(request, env, ctx, dev);
   const item = /^\/api\/items\/([a-f0-9]{16})$/.exec(path);
   if (item && method === 'PUT') return editItem(request, env, ctx, dev, item[1]);
-  if (item && method === 'DELETE') return deleteItem(request, env, ctx, dev, item[1]);
+  if (item && method === 'DELETE') return deleteItem(request, env, ctx, dev, item[1], url);
+  const restore = /^\/api\/items\/([a-f0-9]{16})\/restore$/.exec(path);
+  if (restore && method === 'POST') return restoreItem(request, env, ctx, dev, restore[1]);
   if (path === '/api/files' && method === 'POST') return putFile(request, env, dev, url);
   if (path === '/api/files/parts' && method === 'POST') return partsStart(env, dev, url);
   if (path === '/api/files/parts' && method === 'PUT') return partsPut(request, env, dev, url);
@@ -412,6 +660,9 @@ async function api(request, env, ctx, url) {
     if (path === '/api/admin/keys' && method === 'POST') return adminNewKey(request, env);
     const k = /^\/api\/admin\/keys\/([a-f0-9]{12})$/.exec(path);
     if (k && method === 'PUT') return adminSetKey(request, env, k[1]);
+    if (k && method === 'DELETE') return adminDeleteKey(request, env, ctx, k[1], url);
+    const kd = /^\/api\/admin\/devices\/([a-f0-9]{16})\/kick$/.exec(path);
+    if (kd && method === 'POST') return adminKickDevice(request, env, ctx, kd[1]);
   }
   throw new Bad('not_found', 404);
 }

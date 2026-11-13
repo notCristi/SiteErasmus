@@ -1,5 +1,5 @@
 /* =========================================================
-   Pagina UPLOAD: parola, formularul, lista cu ce ai urcat si (pentru admin) parolele.
+   Pagina UPLOAD: parola, formularul, lista cu ce ai urcat si (pentru admin) parolele si dispozitivele.
    Parola nu se verifica aici, ci pe server (_worker.js). In browser ramane doar un cod de acces
    al acestui dispozitiv (localStorage, "erasmus-upload"), ca sa nu o mai ceara data viitoare.
    Textele formularului sunt mai jos, in TYPES si in functiile panel...; limitele sunt in LIMIT.
@@ -27,8 +27,46 @@ const ICON = {
   places: 'M12 21s6-5.4 6-10.2A6 6 0 0 0 6 10.8C6 15.6 12 21 12 21z M12 13a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4z',
   up: 'M12 16V4 M7 9l5-5 5 5 M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3',
   edit: 'M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4', bin: 'M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13',
+  restore: 'M9 14L4 9l5-5 M4 9h10.5a5.5 5.5 0 0 1 0 11H11',
 };
 const svg = (d, size = 24) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d.split(' M').map((p, i) => `<path d="${i ? 'M' : ''}${p}"/>`).join('')}</svg>`;
+// helper DOM sigur (fara innerHTML pe date venite de la utilizatori)
+function el(tag, attrs, ...kids) {
+  const n = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === 'class') n.className = v;
+    else if (k === 'text') n.textContent = String(v);
+    else if (k === 'dataset') Object.assign(n.dataset, v);
+    else if (k === 'on') for (const [ev, fn] of Object.entries(v)) n.addEventListener(ev, fn);
+    else if (k === 'checked' || k === 'disabled' || k === 'selected' || k === 'required' || k === 'readOnly') n[k] = !!v;
+    else n.setAttribute(k, v === true ? '' : String(v));
+  }
+  for (const c of kids.flat(Infinity)) {
+    if (c === null || c === undefined || c === false) continue;
+    n.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
+  }
+  return n;
+}
+function svgEl(d, size = 18) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const s = document.createElementNS(ns, 'svg');
+  s.setAttribute('viewBox', '0 0 24 24');
+  s.setAttribute('width', String(size));
+  s.setAttribute('height', String(size));
+  s.setAttribute('fill', 'none');
+  s.setAttribute('stroke', 'currentColor');
+  s.setAttribute('stroke-width', '1.6');
+  s.setAttribute('stroke-linecap', 'round');
+  s.setAttribute('stroke-linejoin', 'round');
+  s.setAttribute('aria-hidden', 'true');
+  for (const [i, p] of d.split(' M').entries()) {
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', (i ? 'M' : '') + p);
+    s.appendChild(path);
+  }
+  return s;
+}
 // cele 7 feluri de upload; staff = doar profesorii si adminul (acolo se inlocuieste un text care exista deja)
 const TYPES = [
   { id: 'media', name: 'Photos & videos', hint: 'Gallery and the places on the map' },
@@ -41,14 +79,22 @@ const TYPES = [
 ];
 const MSG = {
   wrong_key: 'That key is not right. Check it and try again.', too_many_tries: 'Too many tries. Wait 15 minutes, then try again.',
-  not_configured: 'Upload is not switched on yet. Ask the website team.', signed_out: 'This device was signed out. Enter your key again.',
+  not_configured: 'Upload is not switched on yet. Ask the website team.', signed_out: 'This device was signed out or the session expired. Enter your key again.',
   file_too_big: 'This file is too big.', file_type: 'This kind of file cannot be uploaded here.', daily_limit: 'This device reached the upload limit for today.',
+  storage_full: 'The website storage limit is reached. Ask the admin to free space.', key_quota: 'This key reached its storage quota.',
+  key_expired: 'This key has expired. Ask your teacher or admin for a new one.', key_locked: 'This key is locked for new devices.',
+  device_limit: 'This key reached the maximum number of devices.',
   not_allowed: 'Your key does not allow this.', missing_field: 'Something is missing. Check the fields above.', bad_link: 'The link has to start with https://',
   key_taken: 'This key already exists. Choose another one.', key_too_short: 'A key needs at least 8 characters.', not_found: 'It is no longer there.',
   offline: 'No connection to the server. Check the internet and try again.',
 };
 const say = code => MSG[code] || 'Something went wrong. Try again.';
-const size = n => (n >= MB ? (n / MB).toFixed(n >= 10 * MB ? 0 : 1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+const size = n => {
+  if (!n) return '0 KB';
+  if (n >= 1024 * MB) return (n / (1024 * MB)).toFixed(2) + ' GB';
+  return n >= MB ? (n / MB).toFixed(n >= 10 * MB ? 0 : 1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+};
+const shortDate = ts => new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 const extOf = name => (/\.([a-z0-9]{2,5})$/i.exec(name) || [])[1]?.toLowerCase() || '';
 const kindOf = file => (file.type.startsWith('image/') || EXT.image.includes(extOf(file.name)) ? 'image' : file.type.startsWith('video/') || EXT.video.includes(extOf(file.name)) ? 'video' : EXT.doc.includes(extOf(file.name)) ? 'doc' : '');
 const real = t => (t && !/^\s*\[/.test(t) ? t : '');   // textele inca necompletate din data.js ([ ... ]) nu se pun in campuri
@@ -272,7 +318,7 @@ function formHTML() {
 }
 function publishHTML() {
   if (st.busy) return `<div class="up-pub-txt"><b>${esc(st.busy.text)}</b><div class="up-bar"><i style="width:${Math.round(st.busy.p * 100)}%"></i></div><p class="up-help">Keep this page open until it is done.</p></div>`;
-  const msg = st.done ? `<b>${esc(st.done.text)}</b><p class="up-help">${st.done.href ? `<a href="${st.done.href}" rel="external">See it on the site</a>` : ''}${st.done.warn ? ` ${esc(st.done.warn)}` : ''}</p>`
+  const msg = st.done ? `<b>${esc(st.done.text)}</b><p class="up-help">${st.done.href ? `<a href="${esc(st.done.href)}" rel="external">See it on the site</a>` : ''}${st.done.warn ? ` ${esc(st.done.warn)}` : ''}</p>`
     : st.error ? `<b class="up-err">${esc(st.error)}</b><p class="up-help">Nothing was lost. Fix it and press Publish again.</p>`
     : '<b>It goes live right away, for everyone.</b><p class="up-help">You can edit or delete it later from this device.</p>';
   return `<div class="up-pub-txt">${msg}</div><button type="button" class="btn btn--solid up-go" data-act="publish">Publish now ${I.arrow}</button>`;
@@ -312,7 +358,7 @@ async function publish() {
         } else await post('media', { ...base, ...await sendPhoto(f.file) });
         ok++; f.sent = true;
       } catch (e) {
-        if (e.message === 'signed_out' || e.message === 'offline' || e.message === 'daily_limit') { st.files.media = list.filter(x => !x.sent); throw e; }
+        if (['signed_out', 'offline', 'daily_limit', 'storage_full', 'key_quota'].includes(e.message)) { st.files.media = list.filter(x => !x.sent); throw e; }
         failed.push(`${f.file.name} (${e.message === 'unreadable' ? 'this photo format cannot be read here; save it as JPG first' : say(e.message)})`);
       }
       before += f.file.size;
@@ -392,8 +438,9 @@ async function go() {
   render(false);
 }
 
-/* ---------- dreapta: cine esti, ce ai urcat, parolele ---------- */
-let items = null, shown = 8, keys = null, newKey = null, newKeyJustMade = false;
+/* ---------- dreapta: cine esti, ce ai urcat, Trash, parole si dispozitive (DOM fara innerHTML pt. protectie XSS) ---------- */
+let items = null, trash = [], storage = null, shown = 8, trashShown = 8, keys = null, newKey = null, newKeyJustMade = false;
+let sideTab = 'live', filterText = '', filterMob = 'all', filterType = 'all', kRoleDraft = 'student';
 const LABEL = { media: 'Photo', story: 'Journal', material: 'Material', result: 'Results', link: 'Link', info: 'Mobility info', day: 'Day', stop: 'Place' };
 function describe(it) {
   const m = S.mob(it.mob), stop = it.stop && m?.stops.find(s => s.id === it.stop);
@@ -401,99 +448,346 @@ function describe(it) {
   if (it.type === 'media') return [it.kind === 'video' ? 'Video' : 'Photo', it.caption || (stop ? stop.title : it.place) || 'No caption', [city, stop ? stop.title : it.place].filter(Boolean).join(' · ')];
   if (it.type === 'story') return ['Journal', it.title, city];
   if (it.type === 'material') return ['Material', it.title || it.slot, `${city} · category ${it.cat.toUpperCase()}`];
-  if (it.type === 'result') return ['Results', it.text.slice(0, 70), `${city} · ${SECS[it.sec]}`];
-  if (it.type === 'link') return ['Link', it.title, `${city} · ${WHERE[it.where]}`];
-  if (it.type === 'info') return ['Mobility info', (INFO.find(x => x[0] === it.part) || [])[1], city];
+  if (it.type === 'result') return ['Results', (it.text || '').slice(0, 70), `${city} · ${SECS[it.sec] || ''}`];
+  if (it.type === 'link') return ['Link', it.title, `${city} · ${WHERE[it.where] || ''}`];
+  if (it.type === 'info') return ['Mobility info', (INFO.find(x => x[0] === it.part) || [])[1] || 'Info', city];
   if (it.type === 'day') return ['Day', `${it.day}: ${it.title}`, city];
-  return ['Place', it.title, city];
+  return ['Place', it.title || '', city];
 }
-function sideHTML() {
-  const me = session.me, admin = me.role === 'admin';
-  const list = items ? (items.length ? `<ul class="up-list">${items.slice(0, shown).map(it => {
-    const [tag, title, meta] = describe(it), when = new Date(it.t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-    return `<li><div class="up-li"><span class="tag b">${esc(tag)}</span><b>${esc(title)}</b><small>${esc(meta)} · ${when}${it.uploader ? ` · ${esc(it.uploader)}` : ''}</small></div>
-      <button type="button" class="up-ic" data-edit="${it.id}" aria-label="Edit ${esc(title)}">${svg(ICON.edit, 18)}</button>
-      <button type="button" class="up-ic" data-del="${it.id}" aria-label="Delete ${esc(title)}">${svg(ICON.bin, 18)}</button></li>`;
-  }).join('')}</ul>${items.length > shown ? '<button type="button" class="btn glass" data-act="more">Show more</button>' : ''}` : '<p class="up-help">Nothing yet. What you publish shows up here.</p>')
-    : '<p class="up-help">Loading…</p>';
-  return `
-  <section class="glass card up-side"><span class="eyebrow">Signed in</span>
-    <p class="h3 up-name">${esc(me.name)}</p>
-    <p class="up-help">Key: ${esc(me.label)}. This device stays signed in.</p>
-    <button type="button" class="btn glass" data-act="logout">Log out</button>
-  </section>
-  <section class="glass card up-side"><span class="eyebrow">${isStaff() ? 'All uploads' : 'Your uploads'}</span>${list}
-    <p class="up-help">${isStaff() ? 'You can edit or delete any upload.' : 'Only what was uploaded from this device shows up here.'}</p>
-  </section>
-  ${admin ? `<section class="glass card up-side"><span class="eyebrow">Access keys</span>
-    ${newKey ? `<div class="up-newkey" role="status"><small>New key for ${esc(newKey.label)}. Write it down now, it is shown only once:</small><code>${esc(newKey.key)}</code><button type="button" class="btn glass" data-act="copykey">Copy</button></div>` : ''}
-    ${keys ? (keys.length ? `<ul class="up-list">${keys.map(k => `<li><div class="up-li"><span class="tag ${k.role === 'teacher' ? 'y' : 'b'}">${k.role === 'teacher' ? 'Teachers' : 'Students'}</span><b>${esc(k.label)}${k.active ? '' : ' (off)'}</b><small>${k.devices} ${k.devices === 1 ? 'device' : 'devices'}${k.names ? ': ' + esc(k.names) : ''}</small></div>
-      <button type="button" class="btn glass up-sm" data-key="${k.id}" data-on="${k.active ? 0 : 1}">${k.active ? 'Turn off' : 'Turn on'}</button></li>`).join('')}</ul>` : '<p class="up-help">No keys yet. Make the first one below.</p>') : '<p class="up-help">Loading…</p>'}
-    <div class="up-field"><label class="up-label" for="up-klabel">New key for</label><input class="up-input" id="up-klabel" type="text" maxlength="60" placeholder="Honterus students, class 10A" autocomplete="off"></div>
-    <div class="up-chips" role="group" aria-label="Kind of key"><button type="button" class="up-chip" data-krole="student" aria-pressed="true">Students</button><button type="button" class="up-chip" data-krole="teacher" aria-pressed="false">Teachers</button></div>
-    <div class="up-field"><label class="up-label" for="up-kcustom">Your own key (optional)</label><input class="up-input" id="up-kcustom" type="text" maxlength="100" placeholder="Leave empty to get a random one" autocomplete="off"></div>
-    <p class="up-help up-kerr" role="alert"></p>
-    <button type="button" class="btn btn--solid" data-act="newkey">Create key</button>
-    <p class="up-help">Turning a key off signs out everyone who used it. What they uploaded stays.</p>
-  </section>` : ''}`;
+function filterMatches(it) {
+  if (filterMob !== 'all' && it.mob !== filterMob) return false;
+  if (filterType !== 'all' && it.type !== filterType) return false;
+  if (!filterText.trim()) return true;
+  const q = filterText.trim().toLowerCase();
+  const [tag, title, meta] = describe(it);
+  return [tag, title, meta, it.uploader].some(v => v && String(v).toLowerCase().includes(q));
+}
+function renderItemList() {
+  const wrap = root.querySelector('.up-items-wrap');
+  if (!wrap) return;
+  wrap.replaceChildren();
+  const admin = session?.me?.role === 'admin';
+  const raw = sideTab === 'trash' && admin ? trash : items;
+  if (!raw) { wrap.appendChild(el('p', { class: 'up-help', text: 'Loading…' })); return; }
+  const list = admin ? raw.filter(filterMatches) : raw;
+  const limit = sideTab === 'trash' ? trashShown : shown;
+  if (!list.length) {
+    wrap.appendChild(el('p', { class: 'up-help', text: sideTab === 'trash' ? 'Trash is empty.' : (raw.length ? 'No uploads match this filter.' : 'Nothing yet. What you publish shows up here.') }));
+    return;
+  }
+  const ul = el('ul', { class: 'up-list' });
+  for (const it of list.slice(0, limit)) {
+    const [tag, title, meta] = describe(it);
+    const when = shortDate(sideTab === 'trash' ? (it.deletedAt || it.t) : it.t);
+    const metaText = `${meta} · ${sideTab === 'trash' ? 'hidden ' : ''}${when}${it.uploader ? ` · ${it.uploader}` : ''}`;
+    const li = el('li', null,
+      el('div', { class: 'up-li' },
+        el('span', { class: 'tag b', text: tag }),
+        el('b', { text: title }),
+        el('small', { text: metaText })
+      )
+    );
+    if (sideTab === 'trash' && admin) {
+      li.appendChild(el('button', { type: 'button', class: 'up-ic', 'aria-label': `Restore ${title}`, on: { click: () => restoreUpload(it) } }, svgEl(ICON.restore, 18)));
+      li.appendChild(el('button', { type: 'button', class: 'up-ic up-ic--danger', 'aria-label': `Delete permanently ${title}`, on: { click: () => purgeUpload(it) } }, svgEl(ICON.bin, 18)));
+    } else {
+      li.appendChild(el('button', { type: 'button', class: 'up-ic', 'aria-label': `Edit ${title}`, on: { click: () => edit(it) } }, svgEl(ICON.edit, 18)));
+      li.appendChild(el('button', { type: 'button', class: 'up-ic', 'aria-label': `Delete ${title}`, on: { click: () => remove(it) } }, svgEl(ICON.bin, 18)));
+    }
+    ul.appendChild(li);
+  }
+  wrap.appendChild(ul);
+  if (list.length > limit) {
+    wrap.appendChild(el('button', { type: 'button', class: 'btn glass', text: 'Show more', on: {
+      click: () => { if (sideTab === 'trash') trashShown += 20; else shown += 20; renderItemList(); }
+    } }));
+  }
+}
+function buildKeysCard(errBox) {
+  const sec = el('section', { class: 'glass card up-side' }, el('span', { class: 'eyebrow', text: 'Access keys & devices' }));
+  if (storage && storage.maxBytes) {
+    const pct = Math.min(100, Math.round((storage.usedBytes / storage.maxBytes) * 100));
+    sec.appendChild(el('div', { class: 'up-meter' },
+      el('div', { class: 'up-meter-top' },
+        el('span', { text: 'R2 storage' }),
+        el('b', { text: `${size(storage.usedBytes)} / ${size(storage.maxBytes)}` })
+      ),
+      el('div', { class: 'up-bar' }, el('i', { style: `width:${pct}%` }))
+    ));
+  }
+  if (newKey) {
+    const copyBtn = el('button', { type: 'button', class: 'btn glass', text: 'Copy', on: {
+      click: async e => { try { await navigator.clipboard.writeText(newKey.key); e.currentTarget.textContent = 'Copied'; } catch (err) {} }
+    } });
+    sec.appendChild(el('div', { class: 'up-newkey', role: 'status' },
+      el('small', { text: `New key for ${newKey.label}. Write it down now, it is shown only once:` }),
+      el('code', { text: newKey.key }),
+      copyBtn
+    ));
+  }
+  if (!keys) {
+    sec.appendChild(el('p', { class: 'up-help', text: 'Loading…' }));
+  } else if (!keys.length) {
+    sec.appendChild(el('p', { class: 'up-help', text: 'No keys yet. Make the first one below.' }));
+  } else {
+    const kList = el('div', { class: 'up-klist' });
+    const now = Date.now();
+    for (const k of keys) {
+      const tags = el('div', { class: 'up-ktags' },
+        el('span', { class: `tag ${k.role === 'teacher' ? 'y' : 'b'}`, text: k.role === 'teacher' ? 'Teachers' : 'Students' })
+      );
+      if (!k.active) tags.appendChild(el('span', { class: 'tag r', text: 'Off' }));
+      if (k.locked) tags.appendChild(el('span', { class: 'tag r', text: 'Locked' }));
+      if (k.max_devices > 0) tags.appendChild(el('span', { class: 'tag', text: `${k.devices}/${k.max_devices} dev` }));
+      if (k.quota_mb > 0) tags.appendChild(el('span', { class: 'tag', text: `Cap ${k.quota_mb} MB` }));
+      if (k.expires_at > 0) tags.appendChild(el('span', { class: `tag ${k.expires_at < now ? 'r' : 'g'}`, text: k.expires_at < now ? 'Expired' : `Exp ${shortDate(k.expires_at)}` }));
+
+      const kCard = el('div', { class: 'up-kcard' },
+        el('div', { class: 'up-khead' },
+          tags,
+          el('b', { text: k.label }),
+          el('small', { text: `${k.devices} active ${k.devices === 1 ? 'device' : 'devices'} · ${size(k.used_bytes || 0)} used` })
+        ),
+        el('div', { class: 'up-kacts' },
+          el('button', { type: 'button', class: 'btn glass up-xs', text: k.active ? 'Turn off' : 'Turn on', on: {
+            click: async () => { try { await api('PUT', '/admin/keys/' + k.id, { json: { active: !k.active } }); } catch (err) {} mine(); }
+          } }),
+          el('button', { type: 'button', class: 'btn glass up-xs', text: k.locked ? 'Unlock new' : 'Lock new', on: {
+            click: async () => { try { await api('PUT', '/admin/keys/' + k.id, { json: { locked: !k.locked } }); } catch (err) {} mine(); }
+          } }),
+          el('button', { type: 'button', class: 'btn glass up-xs', text: 'Limits', on: { click: () => editKeyLimits(k) } }),
+          el('button', { type: 'button', class: 'btn glass up-xs up-xs--danger', text: 'Delete', on: { click: () => deleteKeyDialog(k) } })
+        )
+      );
+      if (k.deviceList && k.deviceList.length) {
+        const dList = el('ul', { class: 'up-devs' });
+        for (const d of k.deviceList) {
+          const dRow = el('li', { class: 'up-dev' },
+            el('div', { class: 'up-dev-info' },
+              el('span', { class: `up-dot${d.online ? ' on' : ''}`, title: d.online ? 'Signed in' : 'Signed out' }),
+              el('div', { class: 'up-dev-txt' },
+                el('b', { text: d.name }),
+                el('small', { text: `${d.online ? 'Active' : 'Signed out'} · ${shortDate(d.seen)} · ${d.uploads} ${d.uploads === 1 ? 'upload' : 'uploads'}` })
+              )
+            )
+          );
+          if (d.online) {
+            dRow.appendChild(el('button', { type: 'button', class: 'btn glass up-xs', text: 'Disconnect', on: { click: () => kickDeviceDialog(k, d) } }));
+          } else if (d.uploads > 0) {
+            dRow.appendChild(el('button', { type: 'button', class: 'btn glass up-xs', text: 'Hide uploads', on: { click: () => kickDeviceDialog(k, d, true) } }));
+          }
+          dList.appendChild(dRow);
+        }
+        kCard.appendChild(dList);
+      }
+      kList.appendChild(kCard);
+    }
+    sec.appendChild(kList);
+  }
+
+  // Formular creare cheie noua
+  const kLabel = el('input', { class: 'up-input', id: 'up-klabel', type: 'text', maxlength: '60', placeholder: 'Honterus students, class 10A', autocomplete: 'off' });
+  const kCustom = el('input', { class: 'up-input', id: 'up-kcustom', type: 'text', maxlength: '100', placeholder: 'Leave empty to get a random one', autocomplete: 'off' });
+  const kMaxDev = el('input', { class: 'up-input', id: 'up-kmaxdev', type: 'number', min: '0', max: '500', placeholder: '0 = no limit' });
+  const kQuota = el('input', { class: 'up-input', id: 'up-kquota', type: 'number', min: '0', max: '8000', placeholder: '0 = default' });
+  const kDays = el('input', { class: 'up-input', id: 'up-kdays', type: 'number', min: '0', max: '365', placeholder: '0 = never' });
+  const kErr = el('p', { class: 'up-help up-kerr', role: 'alert' });
+  const roleBtns = el('div', { class: 'up-chips', role: 'group', 'aria-label': 'Kind of key' });
+  for (const [val, label] of [['student', 'Students'], ['teacher', 'Teachers']]) {
+    roleBtns.appendChild(el('button', {
+      type: 'button', class: 'up-chip', 'aria-pressed': kRoleDraft === val ? 'true' : 'false', text: label,
+      on: { click: () => { kRoleDraft = val; [...roleBtns.children].forEach((b, i) => b.setAttribute('aria-pressed', (i === 0 ? 'student' : 'teacher') === val ? 'true' : 'false')); } }
+    }));
+  }
+
+  sec.append(
+    el('div', { class: 'up-field' }, el('label', { class: 'up-label', for: 'up-klabel', text: 'New key for' }), kLabel),
+    roleBtns,
+    el('div', { class: 'up-field' }, el('label', { class: 'up-label', for: 'up-kcustom', text: 'Your own key (optional)' }), kCustom),
+    el('details', { class: 'up-kopts' },
+      el('summary', { text: 'Optional limits (devices, quota, expiry)' }),
+      el('div', { class: 'up-three' },
+        el('div', { class: 'up-field' }, el('label', { class: 'up-label', for: 'up-kmaxdev', text: 'Max devices' }), kMaxDev),
+        el('div', { class: 'up-field' }, el('label', { class: 'up-label', for: 'up-kquota', text: 'Quota (MB)' }), kQuota),
+        el('div', { class: 'up-field' }, el('label', { class: 'up-label', for: 'up-kdays', text: 'Days valid' }), kDays)
+      )
+    ),
+    kErr,
+    el('button', { type: 'button', class: 'btn btn--solid', text: 'Create key', on: {
+      click: async () => {
+        const label = kLabel.value.trim();
+        if (!label) { kErr.textContent = 'Write who the key is for.'; return; }
+        const numOr0 = inp => { const n = parseInt(inp.value, 10); return Number.isFinite(n) && n > 0 ? n : 0; };
+        try {
+          newKey = await api('POST', '/admin/keys', { json: {
+            label, role: kRoleDraft, key: kCustom.value.trim(),
+            max_devices: numOr0(kMaxDev), quota_mb: numOr0(kQuota), expires_days: numOr0(kDays),
+          } });
+          newKeyJustMade = true;
+          await mine();
+        } catch (err) { kErr.textContent = say(err.message); }
+      }
+    } }),
+    el('p', { class: 'up-help', text: 'Lock new prevents new logins on that key while keeping existing devices signed in.' })
+  );
+  return sec;
 }
 async function mine() {
-  try { items = (await api('GET', '/mine')).items; } catch (e) { if (e.message === 'signed_out') return; items = items || []; }
+  try {
+    const r = await api('GET', '/mine');
+    items = r.items || [];
+    trash = r.trash || [];
+    storage = r.storage || null;
+  } catch (e) { if (e.message === 'signed_out') return; items = items || []; }
   if (session?.me.role === 'admin') try { keys = (await api('GET', '/admin/keys')).keys; } catch (e) { keys = keys || []; }
   if (session) renderSide();
 }
 function renderSide() {
-  const el = root.querySelector('.up-aside'); if (!el) return;
-  // ce a apucat adminul sa scrie la "New key" ramane scris cand lista se reincarca
-  const keep = ['#up-klabel', '#up-kcustom'].map(q => el.querySelector(q)?.value || ''), role = el.querySelector('[data-krole][aria-pressed="true"]')?.dataset.krole;
+  const aside = root.querySelector('.up-aside'); if (!aside) return;
+  const keepIds = ['#up-klabel', '#up-kcustom', '#up-kmaxdev', '#up-kquota', '#up-kdays'];
+  const keep = keepIds.map(q => aside.querySelector(q)?.value || '');
+  const detailsOpen = aside.querySelector('.up-kopts')?.open || false;
   const focus = document.activeElement?.id;
-  el.innerHTML = sideHTML();
-  ['#up-klabel', '#up-kcustom'].forEach((q, i) => { const f = el.querySelector(q); if (f && !newKeyJustMade) f.value = keep[i]; });
-  if (role) el.querySelectorAll('[data-krole]').forEach(b => b.setAttribute('aria-pressed', b.dataset.krole === role));
-  if (focus && el.querySelector('#' + focus)) el.querySelector('#' + focus).focus({ preventScroll: true });
-  newKeyJustMade = false;
+
+  const me = session.me, admin = me.role === 'admin';
+  const frag = document.createDocumentFragment();
+
+  // 1. Account card
+  frag.appendChild(el('section', { class: 'glass card up-side' },
+    el('span', { class: 'eyebrow', text: 'Signed in' }),
+    el('p', { class: 'h3 up-name', text: me.name }),
+    el('p', { class: 'up-help', text: `Key: ${me.label}. This device stays signed in.` }),
+    el('button', { type: 'button', class: 'btn glass', text: 'Log out', on: {
+      click: () => { api('POST', '/logout').catch(() => {}); forget(); items = keys = newKey = null; trash = []; storage = null; gate(); }
+    } })
+  ));
+
+  // 2. Uploads & Trash card
+  const upCard = el('section', { class: 'glass card up-side' },
+    el('span', { class: 'eyebrow', text: isStaff() ? 'All uploads' : 'Your uploads' })
+  );
+  if (admin) {
+    const tabs = el('div', { class: 'up-tabs', role: 'tablist' });
+    const liveBtn = el('button', { type: 'button', class: 'up-chip', role: 'tab', 'aria-pressed': sideTab === 'live' ? 'true' : 'false', text: `Live (${items ? items.length : 0})`, on: {
+      click: () => { sideTab = 'live'; renderSide(); }
+    } });
+    const trashBtn = el('button', { type: 'button', class: 'up-chip', role: 'tab', 'aria-pressed': sideTab === 'trash' ? 'true' : 'false', text: `Trash (${trash ? trash.length : 0})`, on: {
+      click: () => { sideTab = 'trash'; renderSide(); }
+    } });
+    tabs.append(liveBtn, trashBtn);
+    upCard.appendChild(tabs);
+
+    const search = el('input', { class: 'up-input up-fsearch', id: 'up-fsearch', type: 'search', placeholder: 'Filter by title, person, key…', value: filterText, on: {
+      input: e => { filterText = e.target.value; renderItemList(); }
+    } });
+    const mobSel = el('select', { class: 'up-input up-fsel', id: 'up-fmob', 'aria-label': 'Filter by mobility', on: {
+      change: e => { filterMob = e.target.value; renderItemList(); }
+    } }, el('option', { value: 'all', text: 'All mobilities', selected: filterMob === 'all' }),
+      ...S.mobilities.map(m => el('option', { value: m.id, text: m.city, selected: filterMob === m.id })));
+    const typeSel = el('select', { class: 'up-input up-fsel', id: 'up-ftype', 'aria-label': 'Filter by type', on: {
+      change: e => { filterType = e.target.value; renderItemList(); }
+    } }, el('option', { value: 'all', text: 'All types', selected: filterType === 'all' }),
+      ...Object.entries(LABEL).map(([v, t]) => el('option', { value: v, text: t, selected: filterType === v })));
+    upCard.appendChild(el('div', { class: 'up-filters' }, search, el('div', { class: 'up-two' }, mobSel, typeSel)));
+  }
+  upCard.appendChild(el('div', { class: 'up-items-wrap' }));
+  upCard.appendChild(el('p', { class: 'up-help', text: isStaff() ? 'Deleted items go to Trash for 7 days before permanent removal.' : 'Only what was uploaded from this device shows up here.' }));
+  frag.appendChild(upCard);
+
+  // 3. Admin Access Keys & Devices card
+  if (admin) frag.appendChild(buildKeysCard());
+
+  aside.replaceChildren(frag);
+  renderItemList();
+
+  if (admin) {
+    keepIds.forEach((q, i) => { const f = aside.querySelector(q); if (f && !newKeyJustMade) f.value = keep[i]; });
+    const det = aside.querySelector('.up-kopts'); if (det && detailsOpen && !newKeyJustMade) det.open = true;
+    if (focus && aside.querySelector('#' + focus)) aside.querySelector('#' + focus).focus({ preventScroll: true });
+    newKeyJustMade = false;
+  }
 }
 
-/* ---------- editare si stergere ---------- */
-function dialog(title, inner, okText, onOK) {
+/* ---------- ferestre de dialog sigure (DOM nodes, fara innerHTML pe date user) ---------- */
+function dialog(title, bodyNode, okText, onOK, danger = false) {
   const d = document.createElement('dialog');
   d.className = 'up-dialog glass';
-  d.innerHTML = `<form method="dialog"><h2 class="h3">${title}</h2>${inner}<p class="up-help up-derr" role="alert"></p>
-    <div class="btn-row"><button type="button" class="btn glass" data-x>Cancel</button><button type="submit" class="btn btn--solid">${okText}</button></div></form>`;
+  const err = el('p', { class: 'up-help up-derr', role: 'alert' });
+  const closeBtn = el('button', { type: 'button', class: 'btn glass', text: 'Cancel', on: { click: () => close() } });
+  const okBtn = el('button', { type: 'submit', class: `btn ${danger ? 'btn--solid up-btn-danger' : 'btn--solid'}`, text: okText });
+  const form = el('form', { method: 'dialog' },
+    el('h2', { class: 'h3', text: title }),
+    bodyNode,
+    err,
+    el('div', { class: 'btn-row' }, closeBtn, okBtn)
+  );
+  d.appendChild(form);
   document.body.appendChild(d);
   const close = () => { d.close(); d.remove(); };
-  d.querySelector('[data-x]').addEventListener('click', close);
   d.addEventListener('cancel', e => { e.preventDefault(); close(); });
-  d.querySelector('form').addEventListener('submit', async e => {
+  form.addEventListener('submit', async e => {
     e.preventDefault();
-    const ok = d.querySelector('[type=submit]'); ok.disabled = true;
-    try { await onOK(d); close(); mine(); stale = true; }
-    catch (err) { d.querySelector('.up-derr').textContent = say(err.message); ok.disabled = false; }
+    okBtn.disabled = true;
+    try { await onOK(form); close(); mine(); stale = true; }
+    catch (errObj) { err.textContent = say(errObj.message); okBtn.disabled = false; }
   });
   signal.addEventListener('abort', () => d.isConnected && close());
   d.showModal();
 }
 function edit(it) {
   const m = S.mob(it.mob) || S.mobilities[0];
-  const f = (name, label, value, max, rows) => `<div class="up-field"><label class="up-label" for="ed-${name}">${label}</label>${rows
-    ? `<textarea class="up-input up-area" id="ed-${name}" name="${name}" rows="${rows}" maxlength="${max}">${esc(value)}</textarea>`
-    : `<input class="up-input" id="ed-${name}" name="${name}" type="text" maxlength="${max}" value="${esc(value)}" autocomplete="off">`}</div>`;
-  const sel = (name, label, options, value) => `<div class="up-field"><label class="up-label" for="ed-${name}">${label}</label><select class="up-input" id="ed-${name}" name="${name}">${options.map(([v, t]) => `<option value="${esc(v)}"${String(v) === String(value) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
-  const tick = (name, label, on) => `<label class="up-check"><input type="checkbox" name="${name}"${on ? ' checked' : ''}><span>${label}</span></label>`;
-  let inner = '';
-  if (it.type === 'media') inner = f('caption', 'Caption', it.caption, 200) +
-    sel('stop', 'Place', [...m.stops.map(s => [s.id, real(s.title) || s.id]), ['', 'Custom place or no place']], it.stop) + f('place', 'Custom place (only without a place above)', it.place, 80) +
-    `<div class="up-checks">${tick('gallery', 'Show in the Gallery', it.gallery)}${tick('map', 'Show at its place on the map', it.map)}</div>`;
-  else if (it.type === 'story') inner = f('title', 'Title', it.title, 120) + sel('day', 'Day', [...m.days.map((d, i) => [i, real(d.day) || 'Day ' + (i + 1)]), [-1, 'Not one day']], it.day) +
-    f('excerpt', 'Short summary', it.excerpt, 300) + f('body', 'Story', it.body, 20000, 10) + f('author', 'Author shown on the site (empty = no name)', it.author, 60);
-  else if (it.type === 'material') inner = (it.slot ? '' : f('title', 'Title', it.title, 160)) + f('by', 'Made by', it.by, 120);
-  else if (it.type === 'result') inner = sel('sec', 'Part', SECS.map((n, i) => [i, n]), it.sec) + f('text', 'Text', it.text, 4000, 7);
-  else if (it.type === 'link') inner = sel('where', 'Where', WHERE.map((n, i) => [i, n]), it.where) + f('title', 'Title', it.title, 160) + f('url', 'Link', it.url, 500);
-  else if (it.type === 'info') inner = it.text !== undefined ? f('text', 'Text', it.text, 3000, 6) : '<p class="up-help">To change this file, publish a new one from Mobility info: it replaces this one.</p>';
-  else if (it.type === 'day') inner = f('day', 'Name of the day', it.day, 30) + f('date', 'Date', it.date, 40) + f('title', 'Title', it.title, 120) + f('text', 'What happened that day', it.text, 600, 3);
-  else inner = f('title', 'Name of the place', it.title, 120) + f('when', 'When', it.when, 60) + f('text', 'What we did there', it.text, 600, 3);
-  dialog('Edit', inner, 'Save', async d => {
-    const v = Object.fromEntries(new FormData(d.querySelector('form')));
+  const f = (name, label, value, max, rows) => {
+    const id = 'ed-' + name;
+    const ctrl = rows
+      ? el('textarea', { class: 'up-input up-area', id, name, rows: String(rows), maxlength: String(max) })
+      : el('input', { class: 'up-input', id, name, type: 'text', maxlength: String(max), autocomplete: 'off' });
+    ctrl.value = value || '';
+    return el('div', { class: 'up-field' }, el('label', { class: 'up-label', for: id, text: label }), ctrl);
+  };
+  const sel = (name, label, options, value) => {
+    const id = 'ed-' + name;
+    const s = el('select', { class: 'up-input', id, name },
+      ...options.map(([v, t]) => el('option', { value: String(v), text: String(t), selected: String(v) === String(value) }))
+    );
+    return el('div', { class: 'up-field' }, el('label', { class: 'up-label', for: id, text: label }), s);
+  };
+  const tick = (name, label, on) => el('label', { class: 'up-check' },
+    el('input', { type: 'checkbox', name, checked: !!on }),
+    el('span', { text: label })
+  );
+  const box = el('div', { class: 'up-dialog-body' });
+  if (it.type === 'media') {
+    box.append(
+      f('caption', 'Caption', it.caption, 200),
+      sel('stop', 'Place', [...m.stops.map(s => [s.id, real(s.title) || s.id]), ['', 'Custom place or no place']], it.stop),
+      f('place', 'Custom place (only without a place above)', it.place, 80),
+      el('div', { class: 'up-checks' }, tick('gallery', 'Show in the Gallery', it.gallery), tick('map', 'Show at its place on the map', it.map))
+    );
+  } else if (it.type === 'story') {
+    box.append(
+      f('title', 'Title', it.title, 120),
+      sel('day', 'Day', [...m.days.map((d, i) => [i, real(d.day) || 'Day ' + (i + 1)]), [-1, 'Not one day']], it.day),
+      f('excerpt', 'Short summary', it.excerpt, 300),
+      f('body', 'Story', it.body, 20000, 10),
+      f('author', 'Author shown on the site (empty = no name)', it.author, 60)
+    );
+  } else if (it.type === 'material') {
+    if (!it.slot) box.appendChild(f('title', 'Title', it.title, 160));
+    box.appendChild(f('by', 'Made by', it.by, 120));
+  } else if (it.type === 'result') {
+    box.append(sel('sec', 'Part', SECS.map((n, i) => [i, n]), it.sec), f('text', 'Text', it.text, 4000, 7));
+  } else if (it.type === 'link') {
+    box.append(sel('where', 'Where', WHERE.map((n, i) => [i, n]), it.where), f('title', 'Title', it.title, 160), f('url', 'Link', it.url, 500));
+  } else if (it.type === 'info') {
+    if (it.text !== undefined) box.appendChild(f('text', 'Text', it.text, 3000, 6));
+    else box.appendChild(el('p', { class: 'up-help', text: 'To change this file, publish a new one from Mobility info: it replaces this one.' }));
+  } else if (it.type === 'day') {
+    box.append(f('day', 'Name of the day', it.day, 30), f('date', 'Date', it.date, 40), f('title', 'Title', it.title, 120), f('text', 'What happened that day', it.text, 600, 3));
+  } else {
+    box.append(f('title', 'Name of the place', it.title, 120), f('when', 'When', it.when, 60), f('text', 'What we did there', it.text, 600, 3));
+  }
+  dialog('Edit', box, 'Save', async form => {
+    const v = Object.fromEntries(new FormData(form));
     const data = { ...it, ...v };
     for (const k of ['day', 'sec', 'where']) if (k in v && it.type !== 'day') data[k] = +v[k];
     if (it.type === 'media') { data.map = 'map' in v && !!v.stop; data.gallery = 'gallery' in v || !data.map; if (v.stop) data.place = ''; }
@@ -502,7 +796,66 @@ function edit(it) {
 }
 function remove(it) {
   const [, title] = describe(it);
-  dialog('Delete it?', `<p class="muted">“${esc(title)}” disappears from the website for everyone. This cannot be undone.</p>`, 'Delete', () => api('DELETE', '/items/' + it.id));
+  const msg = session?.me?.role === 'admin'
+    ? `“${title}” disappears from the website and moves to Trash for 7 days (you can restore it anytime before permanent deletion).`
+    : `“${title}” disappears from the website.`;
+  dialog('Hide or delete?', el('p', { class: 'muted', text: msg }), 'Delete', () => api('DELETE', '/items/' + it.id), true);
+}
+async function restoreUpload(it) {
+  try { await api('POST', `/items/${it.id}/restore`); stale = true; mine(); } catch (e) {}
+}
+function purgeUpload(it) {
+  const [, title] = describe(it);
+  dialog('Delete permanently?',
+    el('p', { class: 'muted', text: `This permanently deletes “${title}” and removes its uploaded files from R2 storage. This cannot be undone.` }),
+    'Delete forever', () => api('DELETE', `/items/${it.id}?permanent=1`), true);
+}
+function editKeyLimits(k) {
+  const maxInp = el('input', { class: 'up-input', id: 'kl-max', name: 'max_devices', type: 'number', min: '0', max: '500', value: String(k.max_devices || 0) });
+  const quotaInp = el('input', { class: 'up-input', id: 'kl-quota', name: 'quota_mb', type: 'number', min: '0', max: '8000', value: String(k.quota_mb || 0) });
+  const expInp = el('input', { class: 'up-input', id: 'kl-days', name: 'expires_days', type: 'number', min: '0', max: '365', placeholder: 'Leave empty to keep, 0 = never expires' });
+  const box = el('div', { class: 'up-dialog-body' },
+    el('div', { class: 'up-field' }, el('label', { class: 'up-label', for: 'kl-max', text: 'Max active devices (0 = unlimited)' }), maxInp),
+    el('div', { class: 'up-field' }, el('label', { class: 'up-label', for: 'kl-quota', text: 'Total storage quota in MB (0 = default)' }), quotaInp),
+    el('div', { class: 'up-field' }, el('label', { class: 'up-label', for: 'kl-days', text: 'Set new expiry in days from now (optional)' }), expInp)
+  );
+  dialog(`Limits · ${k.label}`, box, 'Save limits', async form => {
+    const payload = {
+      max_devices: Math.max(0, Math.min(500, parseInt(maxInp.value, 10) || 0)),
+      quota_mb: Math.max(0, Math.min(8000, parseInt(quotaInp.value, 10) || 0)),
+    };
+    if (expInp.value.trim() !== '') payload.expires_days = Math.max(0, Math.min(365, parseInt(expInp.value, 10) || 0));
+    await api('PUT', '/admin/keys/' + k.id, { json: payload });
+  });
+}
+function deleteKeyDialog(k) {
+  const hideChk = el('input', { type: 'checkbox', name: 'hideUploads' });
+  const box = el('div', { class: 'up-dialog-body' },
+    el('p', { class: 'muted', text: `All ${k.devices} active devices using “${k.label}” will be signed out immediately and can never sign in with this key again.` }),
+    el('label', { class: 'up-check' }, hideChk, el('span', { text: 'Also move all uploads from this key to Trash' }))
+  );
+  dialog(`Delete key “${k.label}”?`, box, 'Delete key', () => api('DELETE', `/admin/keys/${k.id}${hideChk.checked ? '?hide_uploads=1' : ''}`), true);
+}
+function kickDeviceDialog(k, d, hideOnly = false) {
+  const lockChk = el('input', { type: 'checkbox', name: 'lockKey', checked: !hideOnly && !k.locked });
+  const hideChk = el('input', { type: 'checkbox', name: 'hideUploads', checked: hideOnly });
+  const box = el('div', { class: 'up-dialog-body' },
+    el('p', { class: 'muted', text: hideOnly
+      ? `Hide all live uploads from “${d.name}” (moves them to Trash for 7 days).`
+      : `Signs out “${d.name}” immediately. Only this device is removed; other devices stay signed in.` })
+  );
+  if (!hideOnly) {
+    box.appendChild(el('label', { class: 'up-check' }, lockChk,
+      el('span', null, `Lock “${k.label}” for new devices`, el('small', { text: 'Recommended so this person cannot sign in again with the same key.' }))
+    ));
+  }
+  if (d.uploads > 0) {
+    box.appendChild(el('label', { class: 'up-check' }, hideChk,
+      el('span', null, `Move ${d.uploads} ${d.uploads === 1 ? 'upload' : 'uploads'} to Trash`, el('small', { text: 'You can restore them from Trash within 7 days.' }))
+    ));
+  }
+  dialog(hideOnly ? `Hide uploads from “${d.name}”?` : `Disconnect “${d.name}”?`, box, hideOnly ? 'Move to Trash' : 'Disconnect',
+    () => api('POST', `/admin/devices/${d.id}/kick`, { json: { lockKey: !hideOnly && lockChk.checked, hideUploads: hideChk.checked } }), true);
 }
 
 /* ---------- desenarea ---------- */
@@ -523,10 +876,11 @@ function gate(note = '') {
     <div class="up-field"><label class="up-label" for="up-key">Access key</label><input class="up-input" id="up-key" type="password" autocomplete="off" maxlength="200" placeholder="Your key" required></div>
     <div class="up-field"><label class="up-label" for="up-who">Your name</label><input class="up-input" id="up-who" type="text" autocomplete="name" maxlength="60" placeholder="First and last name" required>
       <p class="up-help">Only the website team sees who uploaded what.</p></div>
-    <p class="up-help up-gerr" role="alert">${esc(note)}</p>
+    <p class="up-help up-gerr" role="alert"></p>
     <button type="submit" class="btn btn--solid">Unlock ${I.arrow}</button>
   </form>`;
   const form = root.querySelector('.up-gate'), err = form.querySelector('.up-gerr');
+  err.textContent = note;
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const key = form.querySelector('#up-key').value.trim(), name = form.querySelector('#up-who').value.trim();
@@ -541,7 +895,7 @@ function gate(note = '') {
   });
 }
 
-/* ---------- ce se intampla la click, la scris si la fisiere ---------- */
+/* ---------- ce se intampla la click, la scris si la fisiere (formularul din stanga) ---------- */
 function addFiles(slot, fileList) {
   const want = { media: ['image', 'video'], story: ['image'], doc: ['doc'], res: ['doc'], info: st.info === 'photo' ? ['image'] : ['doc'] }[slot];
   const multiple = slot === 'media' || slot === 'story', bad = [];
@@ -554,7 +908,9 @@ function addFiles(slot, fileList) {
   st.error = bad.join(' · '); st.done = null;
   render();
 }
-root.addEventListener('click', async e => {
+root.addEventListener('click', e => {
+  const formBox = e.target.closest('.up-form');
+  if (!formBox) return;
   const t = e.target.closest('button'); if (!t || st.busy) return;
   if (t.dataset.set) {
     const name = t.dataset.set, v = t.dataset.v, numeric = ['day', 'mat', 'sec', 'where', 'dayI'].includes(name);
@@ -568,21 +924,6 @@ root.addEventListener('click', async e => {
   } else if (t.classList.contains('up-pick')) t.parentElement.querySelector('input[type=file]').click();
   else if (t.dataset.rm) { const [slot, i] = t.dataset.rm.split(':'); st.files[slot].splice(+i, 1); render(false); }
   else if (t.dataset.act === 'publish') go();
-  else if (t.dataset.act === 'more') { shown += 20; renderSide(); }
-  else if (t.dataset.act === 'logout') { api('POST', '/logout').catch(() => {}); forget(); items = keys = newKey = null; gate(); }
-  else if (t.dataset.edit) edit(items.find(x => x.id === t.dataset.edit));
-  else if (t.dataset.del) remove(items.find(x => x.id === t.dataset.del));
-  else if (t.dataset.krole) t.parentElement.querySelectorAll('[data-krole]').forEach(b => b.setAttribute('aria-pressed', b === t));
-  else if (t.dataset.act === 'newkey') {
-    const box = t.closest('.up-side'), err = box.querySelector('.up-kerr'), label = box.querySelector('#up-klabel').value.trim();
-    if (!label) { err.textContent = 'Write who the key is for.'; return; }
-    try {
-      newKey = await api('POST', '/admin/keys', { json: { label, role: box.querySelector('[data-krole][aria-pressed="true"]').dataset.krole, key: box.querySelector('#up-kcustom').value.trim() } });
-      newKeyJustMade = true;
-      await mine();
-    } catch (e2) { err.textContent = say(e2.message); }
-  } else if (t.dataset.act === 'copykey') { try { await navigator.clipboard.writeText(newKey.key); t.textContent = 'Copied'; } catch (e2) {} }
-  else if (t.dataset.key) { try { await api('PUT', '/admin/keys/' + t.dataset.key, { json: { active: t.dataset.on === '1' } }); } catch (e2) {} mine(); }
 });
 root.addEventListener('input', e => {
   const t = e.target;

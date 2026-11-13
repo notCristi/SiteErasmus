@@ -303,7 +303,7 @@
 @media (prefers-reduced-motion:reduce){.ecity .halo{animation:none}.eu-real{transition:none}}
 
 /* ---------- Upload (parola, formularul, lista cu ce ai urcat) ---------- */
-.up-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,340px);gap:22px;align-items:start}
+.up-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,380px);gap:22px;align-items:start}
 .up-form,.up-aside{display:flex;flex-direction:column;gap:22px;min-width:0}
 .up-card{gap:22px}
 .up-head{display:flex;flex-direction:column;gap:12px}
@@ -373,6 +373,42 @@ select.up-input option{color:#10204A;background:#fff}
 .up-li b{font:600 15px/1.3 var(--font);color:#fff;overflow-wrap:anywhere}
 .up-li small{font-size:13px;color:var(--text-3);overflow-wrap:anywhere}
 .up-sm{min-height:40px;padding:0 14px;font-size:13px}
+.up-xs{min-height:32px;padding:0 11px;font-size:12px;border-radius:999px}
+.up-xs--danger,.up-ic--danger{color:#FFB4A2}
+.up-xs--danger:hover,.up-ic--danger:hover{background:rgba(255,95,86,.22)}
+.up-btn-danger{background:#E04F44;color:#fff;border-color:#E04F44}
+.up-tabs{display:flex;flex-wrap:wrap;gap:8px}
+.up-tabs .up-chip{min-height:36px;padding:0 14px;font-size:13px}
+.up-filters{display:flex;flex-direction:column;gap:8px}
+.up-filters .up-input{height:40px;font-size:14px}
+.up-filters select.up-input{background-position:calc(100% - 20px) 17px,calc(100% - 14px) 17px}
+.up-meter{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.05)}
+.up-meter-top{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--text-2)}
+.up-meter-top b{color:#fff;font-weight:600}
+.up-klist{display:flex;flex-direction:column;gap:12px}
+.up-kcard{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12)}
+.up-khead{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.up-khead b{font:600 15px/1.3 var(--font);color:#fff;overflow-wrap:anywhere}
+.up-khead small{font-size:12px;color:var(--text-3)}
+.up-ktags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:2px}
+.up-ktags .tag{height:24px;padding:0 10px;font-size:11px}
+.tag.r{background:rgba(255,95,86,.2);color:#FFB4A2}
+.tag.g{background:rgba(82,229,139,.18);color:#A8F5C3}
+.up-kacts{display:flex;flex-wrap:wrap;gap:6px}
+.up-devs{list-style:none;margin:2px 0 0;padding:8px 0 0;border-top:1px solid var(--linie);display:flex;flex-direction:column;gap:8px}
+.up-dev{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.up-dev-info{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto}
+.up-dev-txt{display:flex;flex-direction:column;min-width:0}
+.up-dev-txt b{font:600 13px/1.25 var(--font);color:#fff;overflow-wrap:anywhere}
+.up-dev-txt small{font-size:11.5px;color:var(--text-3)}
+.up-dot{flex:none;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.28)}
+.up-dot.on{background:#52E58B;box-shadow:0 0 8px rgba(82,229,139,.7)}
+.up-kopts{border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);padding:10px 12px}
+.up-kopts summary{font:600 13px var(--font);color:var(--text-2);cursor:pointer;list-style:none}
+.up-kopts[open] summary{margin-bottom:10px;color:#fff}
+.up-three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.up-three .up-label{font-size:12px}
+.up-three .up-input{height:40px;padding:0 10px;font-size:13px}
 .up-newkey{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:16px;border-radius:16px;background:rgba(255,204,0,.12);border:1px solid rgba(255,204,0,.4)}
 .up-newkey small{font-size:13px;color:var(--text)}
 .up-newkey code{font:700 18px/1.3 ui-monospace,Consolas,monospace;color:#fff;overflow-wrap:anywhere;user-select:all}
@@ -380,10 +416,11 @@ select.up-input option{color:#10204A;background:#fff}
 .up-dialog{width:min(92vw,560px);max-height:88vh;padding:clamp(22px,3vw,32px);border:0;color:var(--text);overflow:auto;background:rgba(16,28,68,.94)}
 .up-dialog::backdrop{background:rgba(4,8,22,.7);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .up-dialog form{display:flex;flex-direction:column;gap:18px}
+.up-dialog-body{display:flex;flex-direction:column;gap:14px}
 .up-dialog .btn{cursor:pointer}
 .up-dialog .btn-row{justify-content:flex-end}
 @media (max-width:980px){.up-grid{grid-template-columns:1fr}}
-@media (max-width:520px){.up-two{grid-template-columns:1fr}.up-go{width:100%;justify-content:center}.up-tiles{grid-template-columns:1fr 1fr}.up-tile{min-height:0;padding:14px}.up-tile b{font-size:19px}}
+@media (max-width:520px){.up-two{grid-template-columns:1fr}.up-three{grid-template-columns:1fr}.up-go{width:100%;justify-content:center}.up-tiles{grid-template-columns:1fr 1fr}.up-tile{min-height:0;padding:14px}.up-tile b{font-size:19px}}
 /* pozele unui articol din jurnal si textele de la Results, cand vin prin Upload */
 .article-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:22px}
 .article-photos button{padding:0;border:0;background:none;cursor:zoom-in;border-radius:var(--r-mic)}
