@@ -1,0 +1,26 @@
+/* Only page content animates. The background video and menu stay live in the same document. */
+:root{--page-ease:cubic-bezier(.22,1,.36,1)}
+.section-nav{--section-expanded-spacing:.68em}
+body:not([data-page="home"]) #nav,body:not([data-page="home"]) #sheet,
+body:not([data-page="home"]) #cream,body[data-page="home"] .foot{display:none!important}
+body:not([data-page="home"]) .section-link{transition:flex-grow 600ms var(--page-ease)}
+body:not([data-page="home"]) .section-link span{transition:letter-spacing 600ms var(--page-ease),color 300ms ease,opacity 300ms ease,scale .3s var(--spring)}
+
+@media (hover:hover) and (pointer:fine){
+  body:not([data-page="home"]) .section-nav nav:has(.section-link:hover) .section-link{flex-grow:1}
+  body:not([data-page="home"]) .section-nav nav:has(.section-link:hover) .section-link span{letter-spacing:clamp(.06em,.24vw,.16em)}
+  body:not([data-page="home"]) .section-nav nav:has(.section-link:hover) .section-link:hover{flex-grow:2.15}
+  body:not([data-page="home"]) .section-nav nav:has(.section-link:hover) .section-link:hover span{letter-spacing:var(--section-expanded-spacing);opacity:1}
+}
+body:not([data-page="home"]) .section-nav nav:has(.section-link:focus-visible) .section-link{flex-grow:1}
+body:not([data-page="home"]) .section-nav nav:has(.section-link:focus-visible) .section-link span{letter-spacing:clamp(.06em,.24vw,.16em)}
+body:not([data-page="home"]) .section-nav nav:has(.section-link:focus-visible) .section-link:focus-visible{flex-grow:2.15}
+body:not([data-page="home"]) .section-nav nav:has(.section-link:focus-visible) .section-link:focus-visible span{letter-spacing:var(--section-expanded-spacing);opacity:1}
+/* The current section keeps its white fill; all other labels stay outlined, even on hover. */
+.section-nav .section-link:not([aria-current="page"]) span{color:transparent}
+@media (max-width:860px),(max-aspect-ratio:4/5){
+  .section-nav{--section-expanded-spacing:clamp(.1em,.68vw,.46em)}
+}
+@media (prefers-reduced-motion:reduce){
+  body:not([data-page="home"]) .section-link,body:not([data-page="home"]) .section-link span{transition:none}
+}

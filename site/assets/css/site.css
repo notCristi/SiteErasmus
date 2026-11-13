@@ -1,0 +1,437 @@
+/* =========================================================
+   Erasmus+ · United in Diversity, Stronger Through Participation
+   Stil comun pentru toate paginile
+   ========================================================= */
+
+/* ---------- fonturi (gazduite pe site, fara Google) ---------- */
+@font-face{font-family:'Big Shoulders Display';font-style:normal;font-weight:800;font-display:swap;
+  src:url(../fonts/big-shoulders-display-latin-800-normal.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Big Shoulders Display';font-style:normal;font-weight:800;font-display:swap;
+  src:url(../fonts/big-shoulders-display-latin-ext-800-normal.woff2) format('woff2');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Big Shoulders Display';font-style:normal;font-weight:700;font-display:swap;
+  src:url(../fonts/big-shoulders-display-latin-700-normal.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Big Shoulders Display';font-style:normal;font-weight:700;font-display:swap;
+  src:url(../fonts/big-shoulders-display-latin-ext-700-normal.woff2) format('woff2');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;
+  src:url(../fonts/inter-latin-wght-normal.woff2) format('woff2-variations');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;
+  src:url(../fonts/inter-latin-ext-wght-normal.woff2) format('woff2-variations');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+
+/* ---------- culori si marimi ---------- */
+:root{
+  --crem:#FCF9F2; --noapte:#0B1638; --adanc:#070E26; --albastru:#003399;
+  --albastru-2:#3D6BFF; --albastru-3:#6E9BFF; --galben:#FFCC00; --cerneala:#10204A;
+  --text:#E4E8F2; --text-2:#C3CBE0; --text-3:#97A2BF;
+  --linie:rgba(255,255,255,.12);
+  --r:26px; --r-mic:16px;
+  --max:1200px; --pad:clamp(18px,4vw,40px);
+  --nav-h:60px; --nav-top:max(16px, calc(env(safe-area-inset-top, 0px) + 8px));
+  --font:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --disp:'Big Shoulders Display',Impact,'Arial Narrow',sans-serif;
+  --bar:var(--noapte);   /* culoarea barelor telefonului; pe iPhone e negru (vezi .edges mai jos) */
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--bar);-webkit-text-size-adjust:100%;scroll-padding-top:110px;scrollbar-width:none}
+/* Ascunde bara paginii, pastrand derularea cu mouse-ul, tastatura si atingerea. */
+html::-webkit-scrollbar{display:none}
+body{margin:0;min-height:100vh;min-height:100svh;font:400 16px/1.6 var(--font);color:var(--text);background:transparent;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img,video,svg{display:block;max-width:100%}
+a{color:inherit}
+button{font:inherit;color:inherit}
+h1,h2,h3,h4,p{margin:0}
+.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:focus-visible{outline:2px solid var(--galben);outline-offset:3px;border-radius:10px}
+/* Titlul primeste focus la schimbarea paginii (pentru cititoarele de ecran); nu are nevoie de chenar. */
+h1[tabindex="-1"]:focus{outline:none}
+html{-webkit-tap-highlight-color:transparent}
+::selection{background:rgba(61,107,255,.45);color:#fff}
+.skip-link{position:fixed;left:16px;top:-60px;z-index:200;padding:10px 16px;border-radius:12px;background:var(--crem);color:var(--cerneala);font-weight:600;text-decoration:none}
+.skip-link:focus{top:16px}
+
+/* ---------- fundalul paginilor ---------- */
+/* pe paginile interioare: o imagine estompata din video + lumina albastra; ajuta sticla sa "prinda" culoare */
+/* Fundalul: acelasi element si aceleasi straturi pe toate paginile. Clasa lui e .bg pe prima pagina si .fundal
+   pe celelalte (o schimba background-video.js, care construieste si straturile). Intre pagini nu se inlocuieste
+   nimic: cele doua "imbracaminti" se topesc una in alta, ca trecerea sa nu sara.
+     video  ->  .looks { .look-home (umbra, vigneta, intunecare) + .look-page }  ->  .blur (doar sub coloane) */
+:root{--bg-fade:.6s}
+.bg,.fundal{position:fixed;inset:0;z-index:-2;overflow:hidden;isolation:isolate}
+.bg{background:linear-gradient(135deg,#142458 0%,#0B1638 50%,#070E26 100%)}
+.fundal{background:var(--noapte)}
+:is(.bg,.fundal) .img{position:absolute;inset:-8%;background:url(../img/fundal-blur.jpg) center/cover no-repeat;transform:scale(1.05);opacity:0;transition:opacity var(--bg-fade) linear}
+.fundal .img{opacity:.55}
+.bgv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity .35s linear}
+.bgv.off{opacity:0}
+/* pana construieste scriptul straturile, paginile din interior au deja culoarea lor */
+.fundal:not(.ready)::before{content:'';position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(7,14,38,.72) 0%,rgba(7,14,38,.82) 50%,rgba(7,14,38,.9) 100%)}
+/* blurul de sub coloanele primei pagini (cu nuanta lui). E strat al fundalului, nu al coloanelor: asa se poate estompa lin. */
+.blur{position:absolute;inset:0;z-index:3;opacity:0;transition:opacity var(--bg-fade) linear;background:rgba(9,17,46,.3);
+  -webkit-backdrop-filter:blur(14px) saturate(150%);backdrop-filter:blur(14px) saturate(150%)}
+.bg.is-cols > .blur{opacity:1}   /* .is-cols il pune home.js cand sunt coloanele pe ecran */
+/* iPhone (Safari si celelalte browsere de pe iOS): zona de sub ceas si cea de sub bara cu adresa nu sunt ale paginii.
+   Telefonul le umple singur cu o singura culoare, aceeasi sus si jos: culoarea lui <html> (--bar), iar un fundal fix
+   (video, imagine) nu are voie sa intre in ele. Pe iPhone culoarea e negru curat, ca zona de sus sa se continue cu
+   Dynamic Island si cu marginea telefonului. Ca sa nu se vada o dunga cu margine dreapta, fundalul se topeste sus si jos
+   exact in culoarea aceea (stratul .edges). Cat de inalta e trecerea: --edge-top si --edge-bottom.
+   Pe alte telefoane si pe calculator nimic din toate astea nu exista.
+   Alta culoare: schimba --bar si --edge aici si SITE_BAR in assets/js/navigation.js (trebuie sa fie aceeasi peste tot). */
+.edges{display:none}
+@supports (-webkit-touch-callout:none){
+  :root{--bar:#000}
+  /* Safari se poate uita si la culoarea de fundal a elementelor fixe lipite de margini: le dam aceeasi culoare.
+     Ce se vede ramane la fel, pentru ca albastrul e pus deasupra, ca imagine. */
+  .bg{background-color:#000}
+  .fundal{background:linear-gradient(var(--noapte),var(--noapte)) #000}
+  .edges{display:block;position:absolute;inset:0;z-index:4;pointer-events:none;--edge-top:120px;--edge-bottom:150px;--edge:0,0,0;
+    background:linear-gradient(180deg,rgb(var(--edge)) 0,rgba(var(--edge),.82) 16%,rgba(var(--edge),.5) 42%,rgba(var(--edge),.18) 72%,rgba(var(--edge),0) 100%) top/100% var(--edge-top) no-repeat}
+  /* Jos, negrul apare doar la finalul paginii. Cat mai e pagina de derulat, continutul trece liber pe sub bara Safari.
+     .at-end il pune assets/js/layout.js (pe paginile care nu se deruleaza, ca prima pagina, e mereu pus). */
+  .edges::after{content:'';position:absolute;inset:auto 0 0;height:var(--edge-bottom);opacity:0;transition:opacity .35s ease;
+    background:linear-gradient(0deg,rgb(var(--edge)) 0,rgba(var(--edge),.82) 16%,rgba(var(--edge),.5) 42%,rgba(var(--edge),.18) 72%,rgba(var(--edge),0) 100%)}
+  html.at-end .edges::after{opacity:1}
+  /* meniul de sus, cand pagina e derulata, porneste tot din negru */
+  header.section-nav::before{background:linear-gradient(180deg,rgba(0,0,0,.96) 0%,rgba(4,9,24,.84) 58%,rgba(7,14,38,0) 100%)}
+}
+/* cele doua imbracaminti. plus-lighter le aduna, deci cat una scade si cealalta creste, suma ramane mereu o trecere dreapta intre ele */
+.looks{position:absolute;inset:0;z-index:3;isolation:isolate}
+.look-home,.look-page,.look-home > *{position:absolute;inset:0}
+.look-home,.look-page{transition:opacity var(--bg-fade) linear}
+.look-page{mix-blend-mode:plus-lighter;background:
+  radial-gradient(60% 50% at 15% 0%,rgba(61,107,255,.35),transparent 70%),
+  radial-gradient(50% 45% at 100% 30%,rgba(0,51,153,.45),transparent 70%),
+  radial-gradient(40% 35% at 70% 100%,rgba(255,204,0,.08),transparent 70%),
+  linear-gradient(180deg,rgba(7,14,38,.72) 0%,rgba(7,14,38,.82) 50%,rgba(7,14,38,.9) 100%)}
+.has-video .look-page{background:linear-gradient(180deg,rgba(7,14,38,.58),rgba(7,14,38,.82))}
+.bg .look-page,.fundal .look-home{opacity:0}
+/* Amestecul de mai sus (isolation + plus-lighter) e nevoie doar cat dureaza trecerea: atunci background-video.js pune clasa .fading.
+   In rest imbracamintea care nu se vede e scoasa de tot, ca browserul sa nu o mai amestece peste video la fiecare cadru. */
+:is(.bg,.fundal):not(.fading) .looks{isolation:auto}
+:is(.bg,.fundal):not(.fading) .look-page{mix-blend-mode:normal}
+.bg:not(.fading) .look-page,.fundal:not(.fading) .look-home{visibility:hidden}
+/* prima pagina: umbra, vigneta si intunecarea (cat spune --dim, pus de home.js) */
+.shade{background:linear-gradient(180deg,rgba(5,10,28,.62) 0%,rgba(5,10,28,.46) 42%,rgba(5,10,28,.74) 100%)}
+.vig{background:radial-gradient(ellipse 75% 70% at 50% 46%,rgba(0,0,0,0) 55%,rgba(0,0,0,.5) 100%)}
+.dim{opacity:var(--dim,0);transition:opacity .6s ease;background:
+  radial-gradient(60% 50% at 10% 10%,rgba(61,107,255,.18),transparent 70%),
+  radial-gradient(50% 50% at 95% 60%,rgba(0,51,153,.3),transparent 70%),
+  rgba(7,14,38,.8)}
+
+/* ---------- sticla (liquid glass) ---------- */
+.glass{position:relative;isolation:isolate;border-radius:var(--r);
+  background:linear-gradient(155deg,rgba(255,255,255,.13) 0%,rgba(255,255,255,.05) 38%,rgba(255,255,255,.03) 62%,rgba(255,255,255,.08) 100%);
+  -webkit-backdrop-filter:blur(22px) saturate(170%);backdrop-filter:blur(22px) saturate(170%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -1px 0 rgba(255,255,255,.04),0 24px 60px -28px rgba(0,0,0,.75),0 2px 8px rgba(0,0,0,.12)}
+/* marginea care "refracta" lumina: mai luminoasa sus-stanga si jos-dreapta */
+.glass::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.55),rgba(255,255,255,.12) 28%,rgba(255,255,255,0) 52%,rgba(255,255,255,.1) 78%,rgba(255,255,255,.38));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+/* reflexia moale de sus */
+.glass::after{content:'';position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;
+  background:radial-gradient(120% 70% at 18% -10%,rgba(255,255,255,.16),rgba(255,255,255,0) 55%)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .glass{background:rgba(20,32,74,.92)}
+}
+a.glass,button.glass{transition:transform .35s cubic-bezier(.2,.8,.2,1),scale .3s var(--spring),box-shadow .35s ease,background .35s ease}
+a.glass:hover,button.glass:hover{transform:translateY(-3px);box-shadow:inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(255,255,255,.05),0 30px 70px -28px rgba(0,0,0,.85),0 2px 8px rgba(0,0,0,.12)}
+
+/* ---------- butoane ---------- */
+.btn{display:inline-flex;align-items:center;gap:10px;min-height:46px;padding:0 20px;border-radius:999px;border:0;cursor:pointer;
+  font:600 15px/1 var(--font);text-decoration:none;color:#fff;white-space:nowrap}
+.btn svg{width:16px;height:16px;flex:none}
+.btn--solid{background:var(--crem);color:var(--cerneala);box-shadow:0 10px 30px -12px rgba(0,0,0,.6)}
+.btn--solid:hover{background:#fff}
+.btn.glass{border-radius:999px}
+.btn[aria-disabled="true"]{cursor:default}
+.btn-row{display:flex;flex-wrap:wrap;gap:12px}
+
+/* ---------- meniul de sus ---------- */
+.nav{position:fixed;left:50%;top:var(--nav-top);z-index:50;transform:translateX(-50%);height:var(--nav-h);
+  width:max-content;max-width:calc(100% - 24px);--in:1}
+.nav-glass{position:absolute;inset:0;border-radius:999px;opacity:var(--in)}
+.nav-in{position:relative;height:100%;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;padding:0 8px}
+.nav-side{display:flex;align-items:center;gap:2px;opacity:var(--in)}
+.nav-side.l{justify-content:flex-end;transform:translateX(calc((1 - var(--in)) * 24px))}
+.nav-side.r{justify-content:flex-start;transform:translateX(calc((var(--in) - 1) * 24px))}
+.nav a.lnk{position:relative;display:flex;align-items:center;height:42px;padding:0 15px;border-radius:999px;text-decoration:none;
+  font:600 14px/1 var(--font);letter-spacing:.01em;color:rgba(236,240,250,.82);transition:color .2s ease,background .2s ease}
+.nav a.lnk:hover{color:#fff;background:rgba(255,255,255,.08)}
+.nav a.lnk[aria-current="page"]{color:#fff;background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.08));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 0 0 1px rgba(255,255,255,.08),0 4px 14px -6px rgba(0,0,0,.5)}
+.nav a.lnk[aria-current="page"]::after{content:'';position:absolute;left:50%;bottom:5px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--galben)}
+.nav .flag{display:block;width:44px;height:44px;margin:0 10px;border-radius:50%;flex:none}
+.nav .flag svg{width:100%;height:100%;filter:drop-shadow(0 4px 10px rgba(0,0,0,.45))}
+.nav .flag:focus-visible{outline-offset:4px;border-radius:50%}
+.nav .brand,.nav .menu-btn{display:none}
+
+/* telefon / ecran ingust: Erasmus+ | steag | Meniu */
+@media (max-width:900px){
+  .nav{width:calc(100% - 24px)}
+  .nav-side .lnk{display:none!important}
+  .nav .brand{display:block;padding-left:12px;font:800 22px/1 var(--disp);letter-spacing:.02em;color:#fff;text-decoration:none}
+  .nav .brand b{color:var(--galben);font-weight:800}
+  .nav-side.l{justify-content:flex-start}
+  .nav-side.r{justify-content:flex-end}
+  .nav .menu-btn{display:flex;align-items:center;gap:8px;height:42px;padding:0 14px;border-radius:999px;border:0;cursor:pointer;
+    background:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.25);font:600 14px var(--font);color:#fff}
+  .nav .menu-btn i{display:block;width:16px;height:2px;border-radius:2px;background:currentColor;box-shadow:0 5px 0 currentColor;transform:translateY(-2.5px)}
+}
+
+/* meniul pe tot ecranul (telefon) */
+.sheet{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;padding:calc(var(--nav-top) + var(--nav-h) + 20px) 24px max(24px, env(safe-area-inset-bottom, 0px));
+  background:rgba(7,14,38,.55);-webkit-backdrop-filter:blur(30px) saturate(160%);backdrop-filter:blur(30px) saturate(160%);
+  opacity:0;visibility:hidden;transition:opacity .3s ease,visibility 0s linear .3s}
+.sheet.open{opacity:1;visibility:visible;transition:opacity .3s ease}
+.sheet nav{display:flex;flex-direction:column;gap:2px}
+.sheet a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;font:800 clamp(34px,10vw,52px)/1.05 var(--disp);text-transform:uppercase;letter-spacing:.01em;
+  color:transparent;-webkit-text-stroke:1.4px var(--crem);transform:translateY(14px);opacity:0;transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .45s ease,color .2s ease}
+.sheet a small{font:600 12px var(--font);letter-spacing:.14em;color:var(--text-3);-webkit-text-stroke:0}
+.sheet a[aria-current="page"]{color:var(--crem)}
+.sheet.open a{transform:none;opacity:1}
+.sheet .close{position:absolute;right:24px;top:calc(var(--nav-top) + 9px);width:42px;height:42px;border-radius:50%;border:0;cursor:pointer;background:rgba(255,255,255,.12);display:grid;place-items:center}
+.sheet .sheet-foot{margin-top:auto;padding-top:24px;color:var(--text-3);font-size:13px}
+html.sheet-open,html.sheet-open body{overflow:hidden}
+
+/* ---------- structura paginii ---------- */
+.section-nav{position:fixed;inset:0 0 auto;z-index:50;padding:var(--nav-top) var(--pad) 10px}
+/* Cand pagina e derulata, meniul primeste un fundal care se stinge in jos, ca textul de dedesubt sa nu se amestece cu el. */
+.section-nav::before{content:'';position:absolute;inset:0 0 -22px;z-index:-1;pointer-events:none;opacity:0;transition:opacity .3s ease;
+  background:linear-gradient(180deg,rgba(11,22,56,.96) 0%,rgba(9,18,47,.84) 58%,rgba(7,14,38,0) 100%);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  -webkit-mask-image:linear-gradient(180deg,#000 62%,transparent);mask-image:linear-gradient(180deg,#000 62%,transparent)}
+html.scrolled .section-nav::before{opacity:1}
+.section-nav nav{--section-gap:clamp(6px,1vw,18px);display:flex;align-items:center;min-height:var(--nav-h);gap:var(--section-gap)}
+.section-link{position:relative;flex:1 1 0;min-width:0;display:grid;place-items:center;min-height:44px;text-decoration:none}
+.section-nav nav > .section-link:not(:nth-child(3)):not(:last-child)::after{content:'';position:absolute;inset-inline-end:calc(var(--section-gap) / -2);
+  top:50%;translate:0 -50%;width:1px;height:clamp(18px,2vw,32px);background:rgba(255,255,255,.44);pointer-events:none}
+.section-link span{font:800 clamp(20px,2.5vw,36px)/1 var(--disp);text-transform:uppercase;white-space:nowrap;
+  letter-spacing:clamp(.06em,.24vw,.16em);color:transparent;-webkit-text-stroke:1px var(--crem);opacity:.65}
+.section-link[aria-current="page"]{flex-grow:2.15}
+.section-link[aria-current="page"] span,.section-link:hover span,.section-link:focus-visible span{opacity:1}
+.section-link[aria-current="page"] span{letter-spacing:.68em;color:var(--crem)}
+.section-home{position:relative;flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;
+  box-shadow:0 0 0 3px rgba(11,22,56,.5),0 0 0 4px rgba(255,255,255,.16)}
+.section-home svg{width:100%;height:100%}
+@media (max-width:860px),(max-aspect-ratio:4/5){
+  .section-nav{padding-bottom:4px}
+  /* --row = inaltimea unui rand din meniu; --dot = cat de mari sunt steagul si butonul de sunet (la fel amandoua) */
+  .section-nav{--row:42px;--dot:34px}
+  .section-nav nav{--section-gap:6px;display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,var(--row));gap:0 var(--section-gap)}
+  /* steagul sta la mijlocul primului rand (About), butonul de sunet la mijlocul celui de-al doilea (Journal), amandoua de aceeasi marime.
+     Inelul steagului e subtire, ca marginea butonului de sunet, ca sa arate la fel. */
+  .section-home{grid-column:1;grid-row:1 / 3;align-self:start;width:calc(var(--dot) - 2px);height:calc(var(--dot) - 2px);
+    margin:calc((var(--row) - var(--dot)) / 2 + 1px) 1px 0;box-shadow:0 0 0 1px rgba(255,255,255,.22)}   /* -2px: inelul de 1px e pe dinafara */
+  .section-link{min-height:var(--row)}
+  .section-link span{font-size:clamp(16px,4.2vw,24px)}
+  .section-link[aria-current="page"] span{letter-spacing:clamp(.1em,.68vw,.46em)}
+  .section-nav nav > a:nth-child(3)::after,.section-nav nav > .section-home::after{display:none}
+}
+
+.wrap{width:100%;max-width:var(--max);margin:0 auto;padding:0 var(--pad)}
+main{display:block}
+.page{padding-top:calc(var(--nav-top) + var(--nav-h) + clamp(40px,8vh,90px))}
+.section{padding-block:clamp(56px,9vw,120px)}
+.section--tight{padding-block:clamp(36px,6vw,72px)}
+
+/* titlul paginii: contur, inalt, ca cifrele de pe pagina cu countdown */
+.crumbs{display:flex;align-items:center;gap:8px;font:600 12px var(--font);letter-spacing:.16em;text-transform:uppercase;color:var(--text-3)}
+.crumbs a{text-decoration:none}
+.crumbs a:hover{color:#fff}
+.crumbs i{width:4px;height:4px;border-radius:50%;border:1px solid var(--galben)}
+.outline{font-family:var(--disp);font-weight:800;text-transform:uppercase;color:transparent;-webkit-text-stroke:clamp(1.3px,.0105em,2.2px) var(--crem);letter-spacing:.01em}
+.page-title{display:block;margin-top:.5em;font-size:clamp(64px,13vw,168px);line-height:.92;transform:scaleY(1.45);transform-origin:0 100%}
+.page-head .lead{max-width:640px;margin-top:clamp(18px,3vw,30px);font-size:clamp(17px,1.6vw,20px);line-height:1.55;color:var(--text-2)}
+.page-head{padding-bottom:clamp(30px,5vw,56px)}
+/* telefon: titlul ramane pe un singur rand ("THREE SCHOOLS", "THE JOURNEY"). Pe doua randuri urca peste randul Home > ... de deasupra,
+   pentru ca literele sunt intinse in sus (scaleY). 14.6vw = cel mai lung titlu incape pe orice telefon, de la 320px in sus. */
+@media (max-width:480px){.page-title{font-size:clamp(44px,14.6vw,64px)}}
+
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font:600 12px var(--font);letter-spacing:.2em;text-transform:uppercase;color:var(--text-3)}
+.eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;border:1.5px solid var(--galben)}
+.h2{margin-top:12px;font:800 clamp(36px,5.4vw,64px)/.98 var(--disp);text-transform:uppercase;letter-spacing:.005em;color:#fff}
+.h2 .o{color:transparent;-webkit-text-stroke:1.4px var(--crem)}
+.h3{font:700 clamp(24px,2.4vw,30px)/1.05 var(--disp);text-transform:uppercase;letter-spacing:.01em;color:#fff}
+/* paragrafele nu lasa un cuvant singur pe ultimul rand */
+.lead,.muted{text-wrap:pretty}
+.muted{color:var(--text-2)}
+.small{font-size:14px;color:var(--text-3)}
+.sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:clamp(26px,4vw,44px)}
+.sec-head p{max-width:520px;color:var(--text-2)}
+.link-arrow{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:15px;text-decoration:none;color:#fff}
+.link-arrow svg{width:16px;height:16px;transition:transform .25s ease}
+.link-arrow:hover svg{transform:translateX(4px)}
+.ph-txt{color:var(--albastru-3)}   /* textele de completat [ ... ] */
+
+/* ---------- carduri ---------- */
+.grid{display:grid;gap:clamp(14px,1.8vw,22px)}
+.card{padding:clamp(22px,2.6vw,32px);text-decoration:none;display:flex;flex-direction:column;gap:12px}
+.card .arrow{margin-top:auto;display:inline-flex;width:40px;height:40px;border-radius:50%;align-items:center;justify-content:center;background:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.25);transition:background .25s ease,transform .25s ease}
+.card .arrow svg{width:16px;height:16px}
+a.card:hover .arrow{background:var(--crem);color:var(--cerneala);transform:rotate(-45deg)}
+.tag{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 12px;border-radius:999px;font:600 12px var(--font);letter-spacing:.06em;color:#fff;
+  background:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+.tag.y{background:rgba(255,204,0,.14);color:#FFE27A}
+.tag.b{background:rgba(61,107,255,.22);color:#C9D6FF}
+
+/* filtre / taburi (sticla) */
+.seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:5px;border-radius:28px}   /* pe un rand arata tot ca o pastila; pe doua randuri (telefon ingust) ramane un dreptunghi rotunjit, nu un oval */
+.seg button{height:38px;padding:0 16px;border:0;border-radius:999px;background:transparent;cursor:pointer;font:600 14px var(--font);color:rgba(236,240,250,.8);transition:background .2s ease,color .2s ease,scale .3s var(--spring)}
+.seg button:hover{color:#fff;background:rgba(255,255,255,.07)}
+.seg button[aria-pressed="true"],.seg button[aria-selected="true"]{color:#fff;background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.08));box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 14px -6px rgba(0,0,0,.5)}
+.seg button .n{margin-left:6px;font-weight:500;color:var(--text-3)}
+/* pastila care aluneca intre optiuni (o pune si o muta layout.js, segPill). Fara ea, optiunea aleasa isi pastreaza fundalul de mai sus. */
+.seg button{position:relative;z-index:1}
+.seg-pill{position:absolute;left:0;top:0;z-index:0;border-radius:999px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.08));box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 14px -6px rgba(0,0,0,.5);
+  transition:transform .42s cubic-bezier(.25,1,.3,1),width .42s cubic-bezier(.25,1,.3,1),height .2s ease,opacity .2s ease}
+.seg.has-pill button[aria-pressed="true"],.seg.has-pill button[aria-selected="true"]{background:none;box-shadow:none}
+@media (prefers-reduced-motion:reduce){.seg-pill{transition:none}}
+
+/* ---------- loc pentru poze (pana vin pozele adevarate) ---------- */
+.ph{position:relative;overflow:hidden;border-radius:var(--r-mic);background:
+  radial-gradient(120% 90% at var(--px,30%) var(--py,20%),rgba(110,155,255,.38),transparent 60%),
+  radial-gradient(90% 80% at 90% 110%,rgba(255,204,0,.14),transparent 60%),
+  linear-gradient(160deg,#1A2B66,#0C1840);
+  display:flex;align-items:flex-end;padding:14px;color:rgba(255,255,255,.75);font:600 12px/1.3 var(--font);letter-spacing:.04em}
+.ph::before{content:'';position:absolute;inset:0;opacity:.18;background-image:radial-gradient(rgba(255,255,255,.7) 1px,transparent 1px);background-size:14px 14px}
+.ph .ico{position:absolute;left:50%;top:50%;width:42px;height:42px;margin:-21px 0 0 -21px;opacity:.55}
+.ph span{position:relative}
+.ph .play-badge{position:absolute}
+.media{position:relative;overflow:hidden;border-radius:var(--r-mic);background:#0C1840}
+.media img,.media video{width:100%;height:100%;object-fit:cover}
+.play-badge{position:absolute;right:10px;top:10px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(7,14,38,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+.play-badge svg{width:14px;height:14px;margin-left:2px}
+
+/* ---------- lightbox ---------- */
+.lb{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(4,8,22,.78);
+  -webkit-backdrop-filter:blur(24px) saturate(140%);backdrop-filter:blur(24px) saturate(140%);opacity:0;visibility:hidden;transition:opacity .25s ease,visibility 0s linear .25s;touch-action:pan-y}
+.lb.open{opacity:1;visibility:visible;transition:opacity .25s ease}
+.lb-stage{width:min(92vw,1200px);height:min(78vh,780px);display:flex;align-items:center;justify-content:center}
+.lb-stage > *{max-width:100%;max-height:100%;border-radius:18px;box-shadow:0 30px 80px -20px rgba(0,0,0,.8)}
+.lb-stage .ph{width:min(92vw,1040px);aspect-ratio:3/2;max-height:78vh;font-size:15px;padding:22px}
+.lb-stage iframe{width:min(92vw,1200px);aspect-ratio:16/9;border:0}
+.lb-cap{position:absolute;left:50%;bottom:max(22px, env(safe-area-inset-bottom, 0px));transform:translateX(-50%);max-width:calc(100% - 140px);padding:10px 18px;border-radius:999px;text-align:center;font-size:14px;color:var(--text)}
+.lb button{position:absolute;width:48px;height:48px;border-radius:50%;border:0;cursor:pointer;display:grid;place-items:center}
+.lb button svg{width:20px;height:20px}
+.lb .x{right:20px;top:max(20px, env(safe-area-inset-top, 0px))}
+.lb .prev{left:20px;top:50%;margin-top:-24px}
+.lb .next{right:20px;top:50%;margin-top:-24px}
+.lb .count{position:absolute;left:24px;top:max(32px, calc(env(safe-area-inset-top, 0px) + 12px));font:600 13px var(--font);letter-spacing:.1em;color:var(--text-3)}
+@media (max-width:700px){.lb .prev,.lb .next{top:auto;bottom:max(18px, env(safe-area-inset-bottom, 0px));margin:0}.lb-cap{left:16px;right:16px;bottom:84px;width:fit-content;max-width:none;margin:0 auto;transform:none;border-radius:22px}.lb-stage{height:70vh}}
+
+/* ---------- subsol ---------- */
+.foot{position:relative;margin-top:clamp(40px,8vw,100px);padding:0 0 max(28px, env(safe-area-inset-bottom, 0px))}
+.foot-card{padding:clamp(26px,4vw,48px)}
+.foot-top{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(3,minmax(0,.6fr));gap:clamp(24px,4vw,56px)}
+.eu{display:flex;align-items:center;gap:14px}
+.eu svg{width:84px;height:auto;flex:none;border-radius:2px}
+.eu b{font:600 15px/1.25 var(--font);color:#fff}
+.disc{overflow-wrap:anywhere;margin-top:18px;font-size:13px;line-height:1.6;color:var(--text-3);max-width:460px}
+.foot h4{font:600 12px var(--font);letter-spacing:.18em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px}
+.foot ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.foot ul a{text-decoration:none;color:var(--text-2);font-size:15px}
+.foot ul a:hover{color:#fff}
+.foot-schools{display:flex;flex-wrap:wrap;gap:10px;margin-top:clamp(26px,4vw,40px);padding-top:clamp(22px,3vw,30px);border-top:1px solid var(--linie)}
+.foot-schools .tag{height:34px;font-weight:500;letter-spacing:.01em}
+.foot-bottom{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;margin-top:18px;font-size:13px;color:var(--text-3)}
+.foot-bottom a{text-decoration:none;color:var(--text-2)}
+.foot-bottom a:hover{color:#fff}
+@media (max-width:860px){.foot-top{grid-template-columns:1fr 1fr}.foot-top > :first-child{grid-column:1/-1}}
+@media (max-width:440px){.foot-top{grid-template-columns:1fr}}
+
+/* ---------- aparitie la scroll ---------- */
+.js [data-reveal]{opacity:0;transform:translateY(26px);transition:opacity .8s ease,transform .8s cubic-bezier(.2,.8,.2,1);transition-delay:var(--d,0s)}
+.js [data-reveal].in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){
+  .js [data-reveal]{opacity:1;transform:none;transition:none}
+  *{scroll-behavior:auto!important}
+}
+[hidden]{display:none!important}
+
+/* =========================================================
+   RASPUNS LA APASARE SI MICI ANIMATII
+   Tot ce se poate apasa se strange putin cat tii apasat si revine cu un mic arc cand dai drumul.
+   Cat de mult se strange: valorile "scale" de mai jos (1 = deloc). Arcul: --spring.
+   ========================================================= */
+:root{--spring:cubic-bezier(.34,1.56,.64,1)}
+.btn{transition:scale .3s var(--spring),background-color .2s ease,color .2s ease}
+.menu-btn,.sheet .close,.section-home,.gal button,.stop-media button{transition:scale .3s var(--spring)}
+.btn:active,.seg button:active,.menu-btn:active{scale:.95}
+a.glass:active,button.glass:active{scale:.98}            /* cardurile mari se strang mai putin */
+a.glass.btn:active,button.glass.btn:active{scale:.95}
+.lb button:active,.sheet .close:active,.section-home:active{scale:.9}
+.gal button:active,.stop-media button:active{scale:.97}
+.section-link:active span{scale:.95}
+/* linkurile de text: culoarea se schimba lin, iar la apasare palesc o clipa */
+.crumbs a,.foot ul a,.foot-bottom a,.addr a,.write .mail{transition:color .2s ease,opacity .15s ease}
+.crumbs a:active,.foot ul a:active,.foot-bottom a:active,.addr a:active,.write .mail:active,.link-arrow:active{opacity:.6}
+/* pinii de pe harti */
+.pin .dot,.city .core{transform-box:fill-box;transform-origin:center}
+.pin .dot{transition:fill .25s ease,stroke .25s ease,scale .3s var(--spring)}
+.city .core{transition:fill .25s ease,scale .3s var(--spring)}
+.pin:active .dot,.city:active .core{scale:.86}
+/* pozele se apropie putin cand treci cu mouse-ul peste ele */
+.media img{transition:transform .7s var(--page-ease)}
+@media (hover:hover){
+  :is(.gal button,.stop-media button,a.entry):hover .media img{transform:scale(1.05)}
+}
+/* continut nou (poze dupa un filtru sau "Load more", locurile unei calatorii): apare pe rand, de jos */
+@keyframes apare{from{opacity:0;translate:0 12px}}
+.pop{animation:apare .45s var(--page-ease) both;animation-delay:calc(min(var(--i,0),14) * 28ms)}
+.stops > .stop{animation:apare .5s var(--page-ease) both}
+.stops > .stop:nth-child(2){animation-delay:.06s}
+.stops > .stop:nth-child(3){animation-delay:.12s}
+.stops > .stop:nth-child(n+4){animation-delay:.18s}
+/* caseta de pe harta si poza din vizualizator: se schimba lin, nu sar */
+@keyframes schimba{from{opacity:0;scale:.97}}
+.map-box > *{animation:apare .3s var(--page-ease) both}
+.lb-stage > *{animation:schimba .28s var(--page-ease) both}
+@media (prefers-reduced-motion:reduce){
+  .pop,.stops > .stop,.map-box > *,.lb-stage > *{animation:none}
+  .media img{transition:none}
+}
+
+/* ---------- butonul pentru sunet / muzica (assets/js/sfx.js + assets/js/music.js) ---------- */
+.music{position:fixed;left:max(18px, env(safe-area-inset-left, 0px));bottom:max(18px, env(safe-area-inset-bottom, 0px));z-index:75;width:42px;height:42px;padding:0;border:1px solid rgba(16,32,74,.18);border-radius:50%;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:3px;color:var(--cerneala);background:rgba(255,255,255,.6);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  transition:scale .3s var(--spring),background .3s ease,border-color .3s ease,color .3s ease}
+.music:hover{background:#fff}
+.music:active{scale:.9}
+.music:focus-visible{border-radius:50%;outline-color:var(--albastru)}
+/* pe ecranul intunecat (dupa logo si pe celelalte pagini): acelasi stil ca butonul Skip -> (.seq-skip) */
+.music.dark{color:#fff;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22)}
+.music.dark:hover{background:rgba(255,255,255,.2)}
+.music.dark:focus-visible{outline-color:var(--galben)}
+/* difuzor cu 3 unde: undele se aprind pe rand atunci cand chiar se aude un sunet (muzica continua sau un SFX scurt) */
+.music svg{width:22px;height:22px;overflow:visible}
+.music .w{opacity:.22;transition:opacity .25s ease}
+.music .x{opacity:0;transition:opacity .2s ease}
+.music.on .w{animation:music-wave 1.1s ease-in-out infinite}
+.music.on .w2{animation-delay:.18s}
+.music.on .w3{animation-delay:.36s}
+.music.pulse .w{animation:music-pulse .42s ease-out}
+.music.pulse .w2{animation-delay:.06s}
+.music.pulse .w3{animation-delay:.12s}
+@keyframes music-wave{0%,100%{opacity:.22}40%{opacity:1}}
+@keyframes music-pulse{0%{opacity:.22}40%{opacity:1}100%{opacity:.22}}
+/* oprit: undele dispar, in locul lor apare un X */
+.music[aria-pressed="false"]{color:rgba(16,32,74,.55)}
+.music.dark[aria-pressed="false"]{color:rgba(255,255,255,.55)}
+.music[aria-pressed="false"] .w{opacity:0;animation:none}
+.music[aria-pressed="false"] .x{opacity:1}
+@media (prefers-reduced-motion:reduce){.music.on .w,.music.pulse .w{animation:none}.music.on .w{opacity:1}}
+/* telefon, paginile din interior: steagul UE mai mic si mai sus, iar butonul de sunet chiar sub el, in stanga sus */
+@media (max-width:860px),(max-aspect-ratio:4/5){
+  /* aceleasi valori ca .section-nav de mai sus: --row 42px, --dot 34px */
+  body:not([data-page="home"]) .music{top:calc(var(--nav-top) + 42px + (42px - 34px) / 2);bottom:auto;left:var(--pad);width:34px;height:34px}
+  body:not([data-page="home"]) .music svg{width:19px;height:19px}
+}

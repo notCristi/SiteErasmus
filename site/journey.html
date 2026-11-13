@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The journey · Erasmus+</title>
+<meta name="description" content="A map of every Erasmus+ trip, with photos and videos from each place we visited.">
+<meta name="theme-color" content="#0B1638">
+<link rel="icon" href="assets/img/icon.svg" type="image/svg+xml">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preload" href="assets/fonts/big-shoulders-display-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/css/site.css">
+<link rel="stylesheet" href="assets/css/navigation.css">
+<script src="assets/js/page-templates.js"></script>
+<script src="assets/js/navigation.js"></script>
+<link rel="stylesheet" href="assets/css/pages.css">
+<link rel="stylesheet" href="assets/css/home.css" media="not all">
+<script>
+  document.documentElement.classList.add('js');
+  if (location.protocol === 'file:') document.write('<link rel="stylesheet" href="assets/css/fonts-file.css">');
+</script>
+</head>
+<body data-page="journey">
+<div class="fundal" aria-hidden="true"><div class="img"></div></div>
+<main id="main" class="page">
+  <header class="wrap page-head">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><i></i><span aria-current="page">Journey</span></nav>
+    <h1 class="outline page-title">The journey</h1>
+    <p class="lead">Three trips across Europe. Pick a trip to read what it was about, open the learning materials, follow every day on the map and see the results.</p>
+  </header>
+
+  <section class="wrap section--tight" style="padding-top:0">
+    <div class="europe-wrap">
+      <div class="glass europe-card" id="europe" data-reveal></div>
+      <div data-reveal style="--d:.08s">
+        <span class="eyebrow">Three trips</span>
+        <h2 class="h2" style="margin-bottom:22px">Brașov. Orsay. <span class="o">Fjerritslev.</span></h2>
+        <div class="mob-list" id="mobList"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap section" id="detail" style="scroll-margin-top:96px">
+    <div class="mob-bar">
+      <div class="seg glass" id="mobTabs" role="tablist" aria-label="Choose a trip"></div>
+      <p class="mob-info" id="mobInfo"></p>
+    </div>
+    <!-- cele 5 rubrici ale fiecarei mobilitati (aceleasi la toate trei). Continutul lor vine din assets/js/data.js -->
+    <div class="hub-bar"><div class="seg glass" id="hubTabs" role="tablist" aria-label="Sections of this trip"></div></div>
+    <div id="hubBody"></div>
+    <!-- rubrica 3, Daily activities: zilele, harta si locurile -->
+    <div id="hubDaily" hidden>
+      <div class="days" id="days"></div>
+      <div class="journey">
+        <div class="glass map-card" id="mapCard">
+          <div class="map" id="map"></div>
+          <span class="map-legend glass" id="mapLegend"></span>
+          <div class="map-box glass" id="mapBox" aria-live="polite"></div>
+        </div>
+        <div class="stops" id="stops"></div>
+      </div>
+    </div>
+  </section>
+</main>
+<div id="foot"></div>
+<script>if (location.protocol !== 'file:') document.write('<script src="/api/content.js"><\/script>');</script>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/cloud.js"></script>
+<script src="assets/js/layout.js"></script>
+<script src="assets/js/sfx.js"></script>
+<script src="assets/js/background-video.js"></script>
+<script src="assets/js/pages.js"></script>
+<script src="assets/js/europe.js"></script>
+<script src="assets/js/coast-dk.js"></script>
+<script src="assets/js/journey.js"></script>
+</body>
+</html>

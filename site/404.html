@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+  // 404.html poate aparea la orice adresa, deci linkurile pornesc din radacina site-ului.
+  // Daca site-ul sta intr-un subfolder (ex. /SiteErasmus/), scrie-l aici in loc de '/'.
+  var ROOT = '/';
+  if (location.protocol !== 'file:') document.write('<base href="' + ROOT + '">');
+</script>
+<title>Page not found · Erasmus+</title>
+<meta name="description" content="This page does not exist.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0B1638">
+<link rel="icon" href="assets/img/icon.svg" type="image/svg+xml">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preload" href="assets/fonts/big-shoulders-display-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/css/site.css">
+<link rel="stylesheet" href="assets/css/navigation.css">
+<script src="assets/js/page-templates.js"></script>
+<script src="assets/js/navigation.js"></script>
+<link rel="stylesheet" href="assets/css/pages.css">
+<link rel="stylesheet" href="assets/css/home.css" media="not all">
+<script>
+  document.documentElement.classList.add('js');
+  if (location.protocol === 'file:') document.write('<link rel="stylesheet" href="assets/css/fonts-file.css">');
+</script>
+</head>
+<body data-page="404">
+<div class="fundal" aria-hidden="true"><div class="img"></div></div>
+<main id="main" class="page">
+  <section class="wrap nf">
+    <h1 class="outline" aria-label="404">404</h1>
+    <p>This page got lost on the way to Brașov.</p>
+    <div class="btn-row" style="justify-content:center">
+      <a class="btn btn--solid" href="index.html">Back to home <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <a class="btn glass" href="journey.html">Open the map</a>
+    </div>
+  </section>
+</main>
+<div id="foot"></div>
+<script>if (location.protocol !== 'file:') document.write('<script src="/api/content.js"><\/script>');</script>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/cloud.js"></script>
+<script src="assets/js/layout.js"></script>
+<script src="assets/js/sfx.js"></script>
+<script src="assets/js/background-video.js"></script>
+<script src="assets/js/pages.js"></script>
+<script src="assets/js/europe.js"></script>
+<script src="assets/js/coast-dk.js"></script>
+<script src="assets/js/journey.js"></script>
+</body>
+</html>
