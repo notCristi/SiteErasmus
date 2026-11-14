@@ -6,6 +6,11 @@
      MEDIA      = bucket-ul R2      (pozele, video-urile, fisierele)
      ADMIN_KEY  = secret            (parola ta de admin, minimum 10 caractere)
    Fara ele site-ul merge normal, doar UPLOAD spune ca nu e inca pornit.
+   Optional, pentru Cloudflare Images & Stream (pachetul Starter):
+     CF_ACCOUNT_ID  = variabila     (Account ID-ul contului Cloudflare, 32 de caractere)
+     CF_MEDIA_TOKEN = secret        (API token cu drepturile: Cloudflare Images Edit + Stream Edit)
+   Cu ele, pozele noi ajung in Cloudflare Images, iar video-urile noi in Cloudflare Stream;
+   documentele raman in R2. Fara ele (sau daca Images / Stream dau eroare), totul merge in R2, ca inainte.
    Parolele nu ajung niciodata in paginile site-ului: se verifica doar aici.
    ========================================================= */
 
@@ -13,6 +18,12 @@ const MB = 1024 * 1024;
 const MAX = { image: 25 * MB, video: 300 * MB, doc: 100 * MB };   // marimea maxima a unui fisier
 const PART = 20 * MB;                                            // fisierele mari urca in bucati de atat
 const MAX_TOTAL_BYTES = Math.round(8.5 * 1024 * MB);             // plafon global in R2 (sub limita gratuita de 10 GB)
+const IMAGES_MAX = 100000;                                       // cate poze intra in pachet (Images); peste, pozele noi merg in R2
+const IMAGES_MAX_BYTES = 10 * MB;                                // Cloudflare Images primeste poze de cel mult 10 MB
+const IMAGES_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif'];        // formatele pe care le primeste Cloudflare Images
+const IMAGE_VARIANTS = { full: 2560, thumb: 640 };               // marimile in care se dau pozele (latura lunga, px)
+const STREAM_MAX_MIN = 1000;                                     // cate minute de video intra in pachet (Stream); peste, video-urile noi merg in R2
+const CF_API = 'https://api.cloudflare.com/client/v4/accounts/';
 const MEDIA_CACHE = 'public, max-age=2592000';                   // pozele si clipurile raman 30 de zile in memoria browserului
 const TRASH_DAYS_MS = 7 * 24 * 3600 * 1000;                      // postarile ascunse se sterg definitiv dupa 7 zile
 const ORPHAN_MS = 24 * 3600 * 1000;                              // fisierele nepublicate/intrerupte se curata dupa 24h
@@ -42,10 +53,11 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, type TEXT NOT NULL, mob TEXT NOT NULL, skey TEXT, data TEXT NOT NULL, device_id TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
   `CREATE INDEX IF NOT EXISTS items_live ON items (deleted, created)`,
   `CREATE INDEX IF NOT EXISTS items_device ON items (device_id, deleted)`,
-  `CREATE TABLE IF NOT EXISTS files (key TEXT PRIMARY KEY, device_id TEXT NOT NULL, size INTEGER NOT NULL, cls TEXT NOT NULL, name TEXT, upload_id TEXT, item_id TEXT, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS files (key TEXT PRIMARY KEY, device_id TEXT NOT NULL, size INTEGER NOT NULL, cls TEXT NOT NULL, name TEXT, upload_id TEXT, item_id TEXT, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, store TEXT NOT NULL DEFAULT 'r2', ref TEXT, url TEXT, dur REAL NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, ready INTEGER NOT NULL DEFAULT 1)`,
   `CREATE INDEX IF NOT EXISTS files_device ON files (device_id, created)`,
   `CREATE TABLE IF NOT EXISTS attempts (ip TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS attempts_ip ON attempts (ip, ts)`,
+  `CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)`,
 ];
 const MIGRATIONS = [
   `ALTER TABLE keys ADD COLUMN locked INTEGER NOT NULL DEFAULT 0`,
@@ -55,12 +67,24 @@ const MIGRATIONS = [
   `ALTER TABLE files ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE files ADD COLUMN item_id TEXT`,
   `CREATE INDEX IF NOT EXISTS files_orphan ON files (upload_id, item_id, created)`,
+  // unde sta fisierul: 'r2', 'images' (Cloudflare Images) sau 'stream' (Cloudflare Stream); ref = id-ul lui acolo, url = adresa de unde se da
+  `ALTER TABLE files ADD COLUMN store TEXT NOT NULL DEFAULT 'r2'`,
+  `ALTER TABLE files ADD COLUMN ref TEXT`,
+  `ALTER TABLE files ADD COLUMN url TEXT`,
+  `ALTER TABLE files ADD COLUMN dur REAL NOT NULL DEFAULT 0`,       // durata video-ului, in secunde
+  `ALTER TABLE files ADD COLUMN sent INTEGER NOT NULL DEFAULT 0`,   // cati octeti au ajuns deja in Stream (upload pe bucati)
+  `ALTER TABLE files ADD COLUMN ready INTEGER NOT NULL DEFAULT 1`,  // Stream: 0 = inca se prelucreaza, 1 = gata, -1 = nu a putut fi prelucrat
+  `CREATE INDEX IF NOT EXISTS files_store ON files (store, ready)`,
 ];
+const SCHEMA_V = '3';   // se schimba de fiecare data cand se adauga ceva in MIGRATIONS
 let schemaReady = null, lastCleanup = 0;
 function ready(env) {
   if (!schemaReady) schemaReady = (async () => {
     await env.DB.batch(SCHEMA.map(q => env.DB.prepare(q)));
+    const v = await env.DB.prepare("SELECT v FROM meta WHERE k = 'schema'").first('v');
+    if (v === SCHEMA_V) return;   // coloanele noi exista deja
     for (const q of MIGRATIONS) await env.DB.prepare(q).run().catch(() => {});
+    await env.DB.prepare("INSERT INTO meta (k, v) VALUES ('schema', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(SCHEMA_V).run();
   })().catch(e => { schemaReady = null; throw e; });
   return schemaReady;
 }
@@ -183,9 +207,10 @@ async function cleanup(env) {
   const now = Date.now();
   // 1. upload-uri multipart neterminate mai vechi de 24h
   const { results: pendingParts } = await env.DB.prepare(
-    'SELECT key, upload_id FROM files WHERE upload_id IS NOT NULL AND created < ? LIMIT 50').bind(now - ORPHAN_MS).all();
+    'SELECT key, upload_id, store, ref FROM files WHERE upload_id IS NOT NULL AND created < ? LIMIT 50').bind(now - ORPHAN_MS).all();
   for (const r of pendingParts) {
-    await env.MEDIA.resumeMultipartUpload(r.key, r.upload_id).abort().catch(() => {});
+    if (r.store === 'stream') { if (!(await streamDelete(env, r.ref))) continue; }   // nu a mers acum: se incearca din nou ora viitoare
+    else await env.MEDIA.resumeMultipartUpload(r.key, r.upload_id).abort().catch(() => {});
     await env.DB.prepare('DELETE FROM files WHERE key = ?').bind(r.key).run();
   }
   // 2. postari din Trash mai vechi de 7 zile -> sterse definitiv din R2 si D1
@@ -215,22 +240,188 @@ async function cleanup(env) {
     if (backfill.length) await env.DB.batch(backfill);
     if (orphans.length) await dropFiles(env, orphans);
   }
+  // 4. video-urile din Stream care inca se prelucrau: afla daca sunt gata si cat dureaza
+  await streamSync(env, 20).catch(() => {});
 }
 
-/* ---------- fisierele (R2) ---------- */
+/* ---------- Cloudflare Images & Stream ----------
+   Pozele noi stau in Cloudflare Images, video-urile noi in Cloudflare Stream. Cheia fisierului ramane la fel ca in R2
+   (image/2026-11/....webp, video/2026-11/....mp4), iar adresa din pagini ramane /media/<cheie>: serverul trimite de acolo
+   browserul la poza (marimea potrivita) sau la playerul video. Asa o postare din Trash da in continuare 404.
+   Daca Images / Stream nu sunt legate, sunt pline sau dau eroare, fisierul ajunge in R2, ca inainte. */
+const cfOn = env => typeof env.CF_ACCOUNT_ID === 'string' && /^[a-f0-9]{32}$/i.test(env.CF_ACCOUNT_ID.trim()) && typeof env.CF_MEDIA_TOKEN === 'string' && env.CF_MEDIA_TOKEN.trim().length >= 20;
+class CfError extends Error {}
+const cfHeaders = (env, extra = {}) => ({ authorization: 'Bearer ' + env.CF_MEDIA_TOKEN.trim(), ...extra });
+const cfUrl = (env, path) => CF_API + env.CF_ACCOUNT_ID.trim() + path;
+async function cfJson(env, path, init = {}) {
+  let r, j = null;
+  try { r = await fetch(cfUrl(env, path), { ...init, headers: cfHeaders(env, init.headers) }); } catch (e) { throw new CfError('network: ' + (e?.message || e)); }
+  try { j = await r.json(); } catch (e) {}
+  if (!r.ok || (j && j.success === false)) {
+    const err = new CfError(`HTTP ${r.status}` + (j?.errors?.length ? ': ' + j.errors.map(x => `${x.code} ${x.message}`).join('; ') : ''));
+    err.status = r.status; throw err;
+  }
+  return j ? j.result : null;
+}
+const metaGet = (env, k) => env.DB.prepare('SELECT v FROM meta WHERE k = ?').bind(k).first('v');
+const metaSet = (env, k, v) => env.DB.prepare('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').bind(k, String(v)).run();
+// ultima eroare de la Images / Stream ramane notata, ca adminul sa o vada in UPLOAD (fisierul a ajuns oricum in R2)
+async function cfNote(env, where, e) {
+  console.error('Cloudflare ' + where, e?.message || e);
+  await metaSet(env, 'cf_error', JSON.stringify({ at: Date.now(), where, msg: str(String(e?.message || e), 300) })).catch(() => {});
+}
+
+/* ---- Images ---- */
+let variantsReady = false;
+async function imagesVariants(env) {   // marimile "full" si "thumb" se fac o singura data, singure
+  if (variantsReady) return;
+  if (await metaGet(env, 'img_variants') !== '2') {
+    for (const [id, px] of Object.entries(IMAGE_VARIANTS)) {
+      try {
+        await cfJson(env, '/images/v1/variants', { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id, options: { fit: 'scale-down', metadata: 'none', width: px, height: px }, neverRequireSignedURLs: true }) });
+      } catch (e) { await cfJson(env, '/images/v1/variants/' + id); }   // exista deja = e bine; altfel eroarea iese de aici
+    }
+    await metaSet(env, 'img_variants', '2');
+  }
+  variantsReady = true;
+}
+async function imagesWanted(env, f, size) {
+  if (!cfOn(env) || f.cls !== 'image' || !IMAGES_EXT.includes(f.ext) || size > IMAGES_MAX_BYTES) return false;
+  const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM files WHERE store = 'images'").first('n');
+  return n < IMAGES_MAX;
+}
+async function imagesPut(env, f, buf) {
+  await imagesVariants(env);
+  const fd = new FormData();
+  fd.append('file', new Blob([buf], { type: f.type }), f.key.split('/').pop());
+  fd.append('requireSignedURLs', 'false');
+  fd.append('metadata', JSON.stringify({ key: f.key }));
+  const res = await cfJson(env, '/images/v1', { method: 'POST', body: fd });
+  // adresa de livrare vine in raspuns: https://imagedelivery.net/<cod cont>/<id>/<marime>
+  const m = /^(https:\/\/[^/?#]+\/[^/?#]+)\//.exec((res?.variants || [])[0] || '');
+  if (!res?.id || !m) throw new CfError('unexpected upload answer');
+  return { ref: String(res.id), url: `${m[1]}/${res.id}` };
+}
+async function imagesDelete(env, ref) {
+  try { await cfJson(env, '/images/v1/' + encodeURIComponent(ref), { method: 'DELETE' }); return true; }
+  catch (e) { if (e.status === 404) return true; await cfNote(env, 'images delete', e); return false; }
+}
+
+/* ---- Stream (upload prin protocolul tus, in aceleasi bucati de 20 MB) ---- */
+const TUS = { 'tus-resumable': '1.0.0' };
+// tokenul pleaca doar spre api.cloudflare.com
+const tusHeaders = (env, loc, extra = {}) => ({ ...TUS, ...extra, ...(new URL(loc).hostname === 'api.cloudflare.com' ? { authorization: 'Bearer ' + env.CF_MEDIA_TOKEN.trim() } : {}) });
+const b64 = text => { let bin = ''; for (const b of enc(text)) bin += String.fromCharCode(b); return btoa(bin); };
+async function streamUsage(env, fresh = false) {   // cate minute sunt ocupate in cont (raspunsul se tine minte 5 minute)
+  const now = Date.now();
+  let c = null; try { c = JSON.parse(await metaGet(env, 'stream_usage')); } catch (e) {}
+  if (!c || fresh || now - c.at > 5 * 60 * 1000) {
+    try {
+      const r = await cfJson(env, '/stream/storage-usage');
+      c = { at: now, min: Number(r?.totalStorageMinutes) || 0, limit: Number(r?.totalStorageMinutesLimit) || 0, n: Number(r?.videoCount) || 0 };
+      await metaSet(env, 'stream_usage', JSON.stringify(c));
+    } catch (e) { if (!c) c = { at: 0, min: 0, limit: 0, n: 0 }; }
+  }
+  const ours = (await env.DB.prepare("SELECT COALESCE(SUM(dur), 0) AS n FROM files WHERE store = 'stream' AND ready >= 0").first('n')) / 60;
+  return { minutes: Math.max(c.min, ours), max: c.limit > 0 ? Math.min(c.limit, STREAM_MAX_MIN) : STREAM_MAX_MIN, videos: c.n };
+}
+async function streamWanted(env, f) {
+  if (!cfOn(env) || f.cls !== 'video') return false;
+  const u = await streamUsage(env);
+  return u.minutes + f.dur / 60 <= u.max;
+}
+async function streamCreate(env, f, size) {
+  let r;
+  try {
+    r = await fetch(cfUrl(env, '/stream'), { method: 'POST',
+      headers: cfHeaders(env, { ...TUS, 'upload-length': String(size), 'upload-metadata': 'name ' + b64(f.name || f.key) }) });
+  } catch (e) { throw new CfError('network: ' + (e?.message || e)); }
+  const loc = r.headers.get('location'), uid = r.headers.get('stream-media-id');
+  if (r.status !== 201 || !loc || !/^[a-z0-9]{16,64}$/i.test(uid || '')) {
+    let msg = ''; try { msg = (await r.text()).slice(0, 200); } catch (e) {}
+    throw new CfError(`HTTP ${r.status} ${msg}`.trim());
+  }
+  const at = new URL(loc, cfUrl(env, '/stream'));
+  if (at.protocol !== 'https:') throw new CfError('unexpected upload address');
+  return { uid, loc: at.href };
+}
+const tusOffset = async (env, loc) => {
+  const h = await fetch(loc, { method: 'HEAD', headers: tusHeaders(env, loc) });
+  const n = Number(h.headers.get('upload-offset'));
+  return h.ok && Number.isInteger(n) ? n : -1;
+};
+// trimite o bucata; daca o incercare de dinainte a ajuns pe jumatate, continua de unde a ramas
+async function tusPatch(env, loc, offset, buf) {
+  const end = offset + buf.byteLength;
+  for (let turn = 0, at = offset; turn < 2; turn++) {
+    const r = await fetch(loc, { method: 'PATCH', body: at === offset ? buf : buf.slice(at - offset),
+      headers: tusHeaders(env, loc, { 'upload-offset': String(at), 'content-type': 'application/offset+octet-stream' }) });
+    const got = Number(r.headers.get('upload-offset'));
+    if (r.ok && got === end) return end;
+    const real = await tusOffset(env, loc).catch(() => -1);
+    if (real === end) return end;
+    if (!(real > at && real < end)) throw new CfError(`HTTP ${r.status} at byte ${at}`);
+    at = real;
+  }
+  throw new CfError('part not accepted');
+}
+async function streamDelete(env, ref) {
+  try { await cfJson(env, '/stream/' + encodeURIComponent(ref), { method: 'DELETE' }); return true; }
+  catch (e) { if (e.status === 404) return true; await cfNote(env, 'stream delete', e); return false; }
+}
+// adresa de la care se da video-ul: https://customer-<cod>.cloudflarestream.com (vine in detaliile video-ului)
+const streamHost = v => { for (const u of [v?.preview, v?.thumbnail, v?.playback?.hls]) { try { const x = new URL(u); if (x.protocol === 'https:') return x.origin; } catch (e) {} } return ''; };
+async function streamCheck(env, row) {   // intreaba Stream cum sta video-ul si noteaza: gata / eroare, durata, adresa
+  const v = await cfJson(env, '/stream/' + encodeURIComponent(row.ref));
+  const host = streamHost(v), state = v?.status?.state;
+  const ready = v?.readyToStream || state === 'ready' ? 1 : state === 'error' ? -1 : 0;
+  const dur = Number(v?.duration) > 0 ? Number(v.duration) : row.dur || 0;
+  const url = host ? `${host}/${row.ref}` : row.url || null;
+  await env.DB.prepare('UPDATE files SET ready = ?, dur = ?, url = ? WHERE key = ?').bind(ready, dur, url, row.key).run();
+  if (host) await metaSet(env, 'stream_host', host);
+  return { ...row, ready, dur, url };
+}
+async function streamSync(env, limit) {
+  if (!cfOn(env)) return;
+  const { results } = await env.DB.prepare("SELECT key, ref, dur, url FROM files WHERE store = 'stream' AND ready = 0 AND upload_id IS NULL ORDER BY created ASC LIMIT ?").bind(limit).all();
+  for (const row of results) { try { await streamCheck(env, row); } catch (e) { if (e.status === 404) await env.DB.prepare('UPDATE files SET ready = -1 WHERE key = ?').bind(row.key).run(); } }
+}
+// unde trimite /media/<cheie> pentru un fisier care sta in Images sau in Stream
+async function cloudTarget(env, row, url) {
+  const v = url.searchParams.get('v');
+  if (row.store === 'images') return row.url ? `${row.url}/${v === 'thumb' ? 'thumb' : 'full'}` : '';
+  if (row.ready < 0) return '';
+  let base = row.url;
+  if (!base && cfOn(env)) {
+    const host = await metaGet(env, 'stream_host');
+    if (host) base = `${host}/${row.ref}`;
+    else { try { base = (await streamCheck(env, row)).url; } catch (e) {} }
+  }
+  if (!base) return '';
+  const poster = `${base}/thumbnails/thumbnail.jpg?time=1s&width=960&height=960&fit=clip`;
+  if (v === 'poster') return poster;
+  return `${base}/iframe?poster=${encodeURIComponent(poster)}${url.searchParams.get('autoplay') ? '&autoplay=true' : ''}`;
+}
+
+/* ---------- fisierele (R2, Images, Stream) ---------- */
 function describe(url) {
   const name = str(url.searchParams.get('name'), 120), e = ext(name), def = FILES[e];
-  const size = Number(url.searchParams.get('size'));
+  const size = Number(url.searchParams.get('size')), dur = Number(url.searchParams.get('dur'));
   if (!def) throw new Bad('file_type');
   if (!(size > 0)) throw new Bad('bad_size');
   if (size > MAX[def[1]]) throw new Bad('file_too_big', 413);
   const d = new Date();
-  return { name, size, ext: e, type: def[0], cls: def[1], key: `${def[1]}/${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}/${rand(12)}.${e}` };
+  return { name, size, ext: e, type: def[0], cls: def[1], dur: dur > 0 && dur < 6 * 3600 ? Math.round(dur * 10) / 10 : 0,   // durata spusa de browser (video); cea adevarata vine apoi de la Stream
+    key: `${def[1]}/${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}/${rand(12)}.${e}` };
 }
 const r2meta = f => ({ httpMetadata: { contentType: f.type }, customMetadata: { name: f.name } });
-async function quota(env, dev, size) {
-  const total = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM files').first('n');
-  if (total + size > MAX_TOTAL_BYTES) throw new Bad('storage_full', 429);
+// plafonul total e doar pentru R2 (r2 = false: fisierul merge in Images / Stream, care au limitele lor); cota pe cheie numara tot
+async function quota(env, dev, size, r2 = true) {
+  if (r2) {
+    const total = await env.DB.prepare("SELECT COALESCE(SUM(size), 0) AS n FROM files WHERE store = 'r2'").first('n');
+    if (total + size > MAX_TOTAL_BYTES) throw new Bad('storage_full', 429);
+  }
   if (dev.key_id) {
     const kRow = await env.DB.prepare('SELECT quota_mb FROM keys WHERE id = ?').bind(dev.key_id).first();
     if (kRow && kRow.quota_mb > 0) {
@@ -243,38 +434,84 @@ async function putFile(request, env, dev, url) {
   const f = describe(url);
   if (f.size > 95 * MB) throw new Bad('use_parts', 413);
   if (Number(request.headers.get('content-length')) > 95 * MB) throw new Bad('use_parts', 413);
-  await quota(env, dev, f.size);
+  await quota(env, dev, f.size, false);
   const buf = await request.arrayBuffer();
   if (!buf.byteLength) throw new Bad('bad_size');
   if (buf.byteLength > MAX[f.cls] || buf.byteLength > 95 * MB) throw new Bad('file_too_big', 413);
-  if (buf.byteLength > f.size) await quota(env, dev, buf.byteLength);
+  if (buf.byteLength > f.size) await quota(env, dev, buf.byteLength, false);
+  const row = (store, ref, link, ready) => env.DB.prepare('INSERT INTO files (key, device_id, size, cls, name, created, store, ref, url, dur, ready) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(f.key, dev.id, buf.byteLength, f.cls, f.name, Date.now(), store, ref, link, store === 'stream' ? f.dur : 0, ready).run();
+  // pozele: Cloudflare Images
+  if (await imagesWanted(env, f, buf.byteLength)) {
+    try {
+      const im = await imagesPut(env, f, buf);
+      await row('images', im.ref, im.url, 1);
+      return json({ key: f.key, size: buf.byteLength, store: 'images' });
+    } catch (e) { if (e instanceof Bad) throw e; await cfNote(env, 'images upload', e); }
+  }
+  // video-urile mici: Cloudflare Stream
+  if (await streamWanted(env, f).catch(() => false)) {
+    let up = null;
+    try {
+      up = await streamCreate(env, f, buf.byteLength);
+      await tusPatch(env, up.loc, 0, buf);
+      await row('stream', up.uid, null, 0);
+      return json({ key: f.key, size: buf.byteLength, store: 'stream' });
+    } catch (e) { if (up) await streamDelete(env, up.uid); if (e instanceof Bad) throw e; await cfNote(env, 'stream upload', e); }
+  }
+  // restul (si tot ce nu a incaput sau nu a mers mai sus): R2
+  await quota(env, dev, buf.byteLength);
   await env.MEDIA.put(f.key, buf, r2meta(f));
-  await env.DB.prepare('INSERT INTO files (key, device_id, size, cls, name, created) VALUES (?, ?, ?, ?, ?, ?)').bind(f.key, dev.id, buf.byteLength, f.cls, f.name, Date.now()).run();
-  return json({ key: f.key, size: buf.byteLength });
+  await row('r2', null, null, 1);
+  return json({ key: f.key, size: buf.byteLength, store: 'r2' });
 }
 async function partsStart(env, dev, url) {
   const f = describe(url);
+  if (await streamWanted(env, f).catch(() => false)) {   // video-urile mari: Cloudflare Stream, in aceleasi bucati
+    await quota(env, dev, f.size, false);
+    try {
+      const up = await streamCreate(env, f, f.size);
+      await env.DB.prepare("INSERT INTO files (key, device_id, size, cls, name, upload_id, created, store, ref, dur, ready) VALUES (?, ?, ?, ?, ?, ?, ?, 'stream', ?, ?, 0)")
+        .bind(f.key, dev.id, f.size, f.cls, f.name, up.loc, Date.now(), up.uid, f.dur).run();
+      return json({ key: f.key, uploadId: up.uid, partSize: PART, store: 'stream' });
+    } catch (e) { if (e instanceof Bad) throw e; await cfNote(env, 'stream upload', e); }
+  }
   await quota(env, dev, f.size);
   const up = await env.MEDIA.createMultipartUpload(f.key, r2meta(f));
   await env.DB.prepare('INSERT INTO files (key, device_id, size, cls, name, upload_id, created) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(f.key, dev.id, f.size, f.cls, f.name, up.uploadId, Date.now()).run();
-  return json({ key: f.key, uploadId: up.uploadId, partSize: PART });
+  return json({ key: f.key, uploadId: up.uploadId, partSize: PART, store: 'r2' });
 }
 async function pending(env, dev, url) {
   const key = fileKey(url.searchParams.get('key'));
   const row = key && await env.DB.prepare('SELECT * FROM files WHERE key = ? AND device_id = ? AND upload_id IS NOT NULL').bind(key, dev.id).first();
   if (!row) throw new Bad('no_upload', 404);
-  return { row, up: env.MEDIA.resumeMultipartUpload(row.key, row.upload_id) };
+  return { row, up: row.store === 'stream' ? null : env.MEDIA.resumeMultipartUpload(row.key, row.upload_id) };
 }
 async function partsPut(request, env, dev, url) {
   const { row, up } = await pending(env, dev, url);
   const n = Number(url.searchParams.get('n'));
   if (!Number.isInteger(n) || n < 1 || n > Math.ceil(MAX[row.cls] / PART) + 1) throw new Bad('bad_part');
   if (Number(request.headers.get('content-length')) > PART + MB) throw new Bad('part_too_big', 413);
+  if (row.store === 'stream') {
+    const offset = (n - 1) * PART, buf = await request.arrayBuffer();
+    const end0 = offset + buf.byteLength;   // toate bucatile au exact 20 MB, mai putin ultima
+    if (!buf.byteLength || end0 > row.size || (end0 < row.size && buf.byteLength !== PART)) throw new Bad('bad_part');
+    let end;
+    try { end = await tusPatch(env, row.upload_id, offset, buf); }
+    catch (e) { await cfNote(env, 'stream upload', e); throw new Bad('upload_failed', 502); }
+    await env.DB.prepare('UPDATE files SET sent = MAX(sent, ?) WHERE key = ?').bind(end, row.key).run();
+    return json({ partNumber: n, etag: 'tus-' + end });
+  }
   const part = await up.uploadPart(n, request.body);
   return json({ partNumber: part.partNumber, etag: part.etag });
 }
 async function partsDone(request, env, dev, url) {
   const { row, up } = await pending(env, dev, url);
+  if (row.store === 'stream') {   // la Stream nu e nimic de incheiat: video-ul e intreg cand au ajuns toti octetii
+    if (row.sent !== row.size) throw new Bad('bad_part');
+    await env.DB.prepare('UPDATE files SET upload_id = NULL WHERE key = ?').bind(row.key).run();
+    return json({ key: row.key, size: row.size, store: 'stream' });
+  }
   const b = await body(request, 20000);
   const parts = (Array.isArray(b.parts) ? b.parts : []).map(p => ({ partNumber: int(p.partNumber, 1, 1000, 0), etag: str(p.etag, 400) })).filter(p => p.partNumber && p.etag);
   if (!parts.length) throw new Bad('bad_part');
@@ -292,15 +529,29 @@ async function partsDone(request, env, dev, url) {
 }
 async function partsAbort(env, dev, url) {
   const { row, up } = await pending(env, dev, url);
-  await up.abort().catch(() => {});
+  if (row.store === 'stream') await streamDelete(env, row.ref);
+  else await up.abort().catch(() => {});
   await env.DB.prepare('DELETE FROM files WHERE key = ?').bind(row.key).run();
   return json({ ok: true });
 }
+// sterge fisierele de unde stau (R2, Images sau Stream). Ce nu s-a putut sterge acum din Images / Stream ramane notat
+// fara postare (item_id NULL) si il mai incearca o data curatarea automata, ca sa nu ramana platit degeaba.
 async function dropFiles(env, keys) {
-  keys = keys.filter(Boolean);
+  keys = [...new Set(keys.filter(Boolean))];
   if (!keys.length) return;
-  await env.MEDIA.delete(keys);
-  await env.DB.batch(keys.map(k => env.DB.prepare('DELETE FROM files WHERE key = ?').bind(k)));
+  const { results } = await env.DB.prepare(`SELECT key, store, ref FROM files WHERE key IN (${keys.map(() => '?').join(',')})`).bind(...keys).all();
+  const where = new Map(results.map(r => [r.key, r])), gone = [], kept = [];
+  for (const k of keys) {
+    const r = where.get(k);
+    if (!r || r.store === 'r2' || !r.ref) { gone.push(k); continue; }
+    const ok = cfOn(env) && (r.store === 'images' ? await imagesDelete(env, r.ref) : await streamDelete(env, r.ref));
+    (ok ? gone : kept).push(k);
+  }
+  const r2 = gone.filter(k => !where.get(k) || where.get(k).store === 'r2');
+  if (r2.length) await env.MEDIA.delete(r2);
+  const stmts = [...gone.map(k => env.DB.prepare('DELETE FROM files WHERE key = ?').bind(k)),
+    ...kept.map(k => env.DB.prepare('UPDATE files SET item_id = NULL, hidden = 1 WHERE key = ?').bind(k))];
+  if (stmts.length) await env.DB.batch(stmts);
 }
 async function setFilesHidden(env, datas, hidden) {
   const keys = [...new Set(datas.flatMap(d => {
@@ -309,15 +560,20 @@ async function setFilesHidden(env, datas, hidden) {
   if (!keys.length) return;
   await env.DB.batch(keys.map(k => env.DB.prepare('UPDATE files SET hidden = ? WHERE key = ?').bind(hidden ? 1 : 0, k)));
 }
-// pozele si fisierele se dau direct din R2 si raman in memoria browserului (o postare din Trash da 404 la orice cerere noua)
-async function media(request, env, key) {
-  if (!fileKey(key)) return new Response('Not found', { status: 404 });
+// pozele si fisierele se dau direct din R2 si raman in memoria browserului (o postare din Trash da 404 la orice cerere noua).
+// Ce sta in Images / Stream: browserul e trimis de aici la poza (?v=thumb = cea mica) sau la playerul video (?v=poster = imaginea lui).
+async function media(request, env, key, url) {
   if (env.DB) {
     await ready(env);
     const fRow = await env.DB.prepare(
-      'SELECT f.hidden, i.deleted AS item_deleted FROM files f LEFT JOIN items i ON i.id = f.item_id WHERE f.key = ?'
+      'SELECT f.key, f.hidden, f.store, f.ref, f.url, f.dur, f.ready, i.deleted AS item_deleted FROM files f LEFT JOIN items i ON i.id = f.item_id WHERE f.key = ?'
     ).bind(key).first();
     if (fRow && (fRow.hidden || fRow.item_deleted === 1)) return new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
+    if (fRow && fRow.store !== 'r2') {
+      const to = await cloudTarget(env, fRow, url);
+      if (!to) return new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
+      return new Response(null, { status: 302, headers: { location: to, 'cache-control': MEDIA_CACHE, 'x-content-type-options': 'nosniff' } });
+    }
   }
   const obj = await env.MEDIA.get(key, { range: request.headers, onlyIf: request.headers });
   if (!obj) return new Response('Not found', { status: 404 });
@@ -488,8 +744,12 @@ async function content(request, env, ctx, asScript) {
   const hit = await caches.default.match(cacheKey).catch(() => null);
   if (hit) items = await hit.text();
   else {
-    const { results } = await env.DB.prepare('SELECT id, type, mob, data, created FROM items WHERE deleted = 0 ORDER BY created ASC LIMIT 5000').all();
-    items = JSON.stringify(results.map(pub));
+    const [{ results }, st] = await Promise.all([
+      env.DB.prepare('SELECT id, type, mob, data, created FROM items WHERE deleted = 0 ORDER BY created ASC LIMIT 5000').all(),
+      env.DB.prepare("SELECT key FROM files WHERE store = 'stream'").all(),
+    ]);
+    const inStream = new Set(st.results.map(r => r.key));   // sv = video-ul sta in Stream: pagina il arata in playerul lui, nu intr-un <video>
+    items = JSON.stringify(results.map(r => { const o = pub(r); if (o.key && inStream.has(o.key)) o.sv = 1; return o; }));
     ctx.waitUntil(caches.default.put(cacheKey, new Response(items, { headers: { 'cache-control': 'public, max-age=20' } })).catch(() => {}));
   }
   return asScript
@@ -515,12 +775,27 @@ async function mine(env, dev) {
   if (dev.role === 'admin') {
     const [tr, used] = await Promise.all([
       env.DB.prepare(`SELECT i.*, d.name AS by_name, d.key_id AS by_key_id, k.label AS by_label FROM items i LEFT JOIN devices d ON d.id = i.device_id LEFT JOIN keys k ON k.id = d.key_id WHERE i.deleted = 1 ORDER BY i.updated DESC LIMIT 200`).all(),
-      env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM files').first('n'),
+      env.DB.prepare("SELECT COALESCE(SUM(size), 0) AS n FROM files WHERE store = 'r2'").first('n'),
     ]);
     out.trash = tr.results.map(r => ({ ...mapRow(r), deletedAt: r.updated }));
     out.storage = { usedBytes: used || 0, maxBytes: MAX_TOTAL_BYTES };
+    out.cloud = await cloudStatus(env);
   }
   return json(out);
+}
+// ce vede adminul despre Images & Stream: cate poze, cate minute, ce se mai prelucreaza si ultima eroare (din ultimele 24h)
+async function cloudStatus(env) {
+  if (!cfOn(env)) return { on: false };
+  await streamSync(env, 10).catch(() => {});
+  const [images, st, usage, errRaw] = await Promise.all([
+    env.DB.prepare("SELECT COUNT(*) AS n FROM files WHERE store = 'images'").first('n'),
+    env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN ready = 0 THEN 1 ELSE 0 END), 0) AS pending, COALESCE(SUM(CASE WHEN ready < 0 THEN 1 ELSE 0 END), 0) AS failed, COUNT(*) AS n FROM files WHERE store = 'stream' AND upload_id IS NULL").first(),
+    streamUsage(env, true),
+    metaGet(env, 'cf_error'),
+  ]);
+  let error = null; try { const e = JSON.parse(errRaw); if (Date.now() - e.at < 24 * 3600 * 1000) error = e; } catch (e) {}
+  return { on: true, images: { count: images || 0, max: IMAGES_MAX },
+    stream: { minutes: Math.round(usage.minutes * 10) / 10, max: usage.max, videos: st?.n || 0, pending: st?.pending || 0, failed: st?.failed || 0 }, error };
 }
 
 /* ---------- adminul: parolele si dispozitivele ---------- */
@@ -685,8 +960,12 @@ export default {
     try {
       if (url.pathname.startsWith('/api/')) return await api(request, env, ctx, url);
       if (url.pathname.startsWith('/media/')) {
-        if (!env.MEDIA || !['GET', 'HEAD'].includes(request.method)) return new Response('Not found', { status: 404 });
-        return await media(request, env, decodeURIComponent(url.pathname.slice(7)));
+        let key = ''; try { key = fileKey(decodeURIComponent(url.pathname.slice(7))); } catch (e) {}
+        if (key) {
+          if (!env.MEDIA || !['GET', 'HEAD'].includes(request.method)) return new Response('Not found', { status: 404 });
+          return await media(request, env, key, url);
+        }
+        // altfel nu e un fisier urcat, ci unul al site-ului (video-urile de fundal stau in /media/fundal-1.mp4 ...): se da ca orice alt fisier
       }
     } catch (e) {
       if (e instanceof Bad) return json({ error: e.code }, e.status);

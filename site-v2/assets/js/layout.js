@@ -71,8 +71,21 @@ function tile(m, cls = '') {
   const label = m.type === 'video' ? 'Video' : 'Photo';
   if (m.src && m.type === 'photo') return `<div class="media ${cls}"><img src="${esc(m.thumb || m.src)}" alt="${esc(m.caption)}" loading="lazy" decoding="async"></div>`;
   if (m.src && m.type === 'video') return `<div class="media ${cls}"><video src="${esc(m.src)}" ${m.poster || m.thumb ? `poster="${esc(m.poster || m.thumb)}"` : ''} muted playsinline preload="${m.thumb ? 'none' : 'metadata'}"></video><span class="play-badge">${I.play}</span></div>`;
+  // video care se vede intr-un player (Cloudflare Stream): in lista apare imaginea lui; playerul se deschide la click
+  if (m.embed && m.thumb) return `<div class="media ${cls}"><img src="${esc(m.thumb)}" alt="${esc(m.caption)}" loading="lazy" decoding="async"${m.thumb.includes('v=poster') ? ` data-poster="${esc(m.thumb)}"` : ''}><span class="play-badge">${I.play}</span></div>`;
   return `<div class="ph ${cls}" style="--px:${15 + h % 70}%;--py:${5 + (h >> 7) % 50}%">${m.type === 'video' ? I.video : I.photo}<span>${esc(label)} · ${esc(m.place || '')}</span>${m.embed ? `<span class="play-badge">${I.play}</span>` : ''}</div>`;
 }
+// imaginea unui video din Stream exista abia dupa ce Stream l-a prelucrat (cam un minut de la upload):
+// pana atunci ramane fundalul cardului si se mai incearca de cateva ori, fara semnul de poza lipsa
+document.addEventListener('error', e => {
+  const im = e.target;
+  if (!im || im.tagName !== 'IMG' || !im.dataset.poster) return;
+  const n = +(im.dataset.tries || 0);
+  im.style.visibility = 'hidden';
+  if (n >= 8) return;
+  im.dataset.tries = n + 1;
+  setTimeout(() => { if (!im.isConnected) return; im.addEventListener('load', () => { im.style.visibility = ''; }, { once: true }); im.src = `${im.dataset.poster}&r=${n + 1}`; }, 15000);
+}, true);
 
 /* ---------- meniul ---------- */
 const LINKS = [
@@ -196,7 +209,7 @@ function lbShow(i) {
   lbI = (i + lbItems.length) % lbItems.length;
   const m = lbItems[lbI];
   let h;
-  if (m.embed) h = `<iframe src="${esc(m.embed)}" allow="autoplay; fullscreen" allowfullscreen title="${esc(m.caption)}"></iframe>`;
+  if (m.embed) h = `<iframe src="${esc(m.embed)}" allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${esc(m.caption)}"></iframe>`;
   else if (m.src && m.type === 'video') h = `<video src="${esc(m.src)}" ${m.poster || m.thumb ? `poster="${esc(m.poster || m.thumb)}"` : ''} controls autoplay playsinline></video>`;
   else if (m.src) h = `<img src="${esc(m.src)}" alt="${esc(m.caption)}">`;
   else h = tile(m);

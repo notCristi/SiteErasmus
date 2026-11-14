@@ -398,9 +398,11 @@ const TIPURI = { PDF: ['pdf'], Presentation: ['ppt', 'pptx', 'pps', 'ppsx', 'odp
 const tipFisier = f => Object.keys(TIPURI).find(t => TIPURI[t].includes(extFisier(f))) || 'File';
 // cum se arata un fisier in pagina: poza si video-ul se vad, sunetul se asculta, PDF-ul si textul se deschid, restul se descarca
 const felFisier = f => ({ Image: 'image', Video: 'video', Audio: 'audio', PDF: 'open', Text: 'open' }[tipFisier(f)] || 'download');
-const previewFisier = (f, alt) => {
+const previewFisier = (f, alt, stream) => {
   const fel = felFisier(f);
   if (fel === 'image') return `<img class="file-prev" src="${esc(f)}" alt="${esc(alt || '')}" loading="lazy" decoding="async">`;
+  // video-urile din Cloudflare Stream se vad in playerul lui; cele din R2, intr-un <video> obisnuit
+  if (fel === 'video' && stream) return `<iframe class="file-prev" src="${esc(f)}" title="${esc(alt || 'Video')}" loading="lazy" allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
   if (fel === 'video') return `<video class="file-prev" src="${esc(f)}" controls playsinline preload="metadata"></video>`;
   if (fel === 'audio') return `<audio class="file-audio" src="${esc(f)}" controls preload="none"></audio>`;
   return '';
@@ -448,7 +450,7 @@ const PANOURI = {
         <div class="grid mat-list">${items.map(x => {
           const inner = `<span class="tag b">${x.file ? tipFisier(x.file) : 'Coming soon'}</span><b>${tx(x.title)}</b>${x.by ? `<span class="small">${tx(x.by)}</span>` : ''}`;
           if (!x.file) return `<div class="glass card mat pop" style="--i:${k++}">${inner}</div>`;
-          const fel = felFisier(x.file), prev = previewFisier(x.file, x.title);
+          const fel = felFisier(x.file), prev = previewFisier(x.file, x.title, x.stream);
           if (fel === 'video' || fel === 'audio') return `<div class="glass card mat mat--play pop" style="--i:${k++}">${prev}${inner}</div>`;   // se reda direct in card
           return fel === 'download'
             ? `<a class="glass card mat pop" style="--i:${k++}" href="${esc(x.file)}" download>${inner}<span class="link-arrow">Download ${I.ext}</span></a>`
@@ -461,7 +463,7 @@ const PANOURI = {
     return capRubrica(m, 'results', '<p class="muted">What students and teachers thought about the mobility, and what we take from it.</p>') +
       `<div class="grid hub-grid">${m.results.map((r, i) => `<div class="glass card pop" style="--i:${i}"><h3 class="h3">${tx(r.title)}</h3>${
         // textele urcate prin UPLOAD stau unul sub altul; pana vine primul, ramane textul din data.js
-        r.entries?.length ? `<div class="res-list">${r.entries.map(e => `<div class="res-entry"><p class="muted">${tx(e.text)}</p>${e.file ? (felFisier(e.file) === 'image' ? `<a class="file-link" href="${esc(e.file)}" target="_blank" rel="noopener">${previewFisier(e.file, 'Attached image')}<span class="sr"> (opens in a new tab)</span></a>` : previewFisier(e.file)) + linkFisier(e.file, felFisier(e.file) === 'image' ? 'Open the image' : 'Open the file', `Download the file (${tipFisier(e.file)})`) : ''}</div>`).join('')}</div>`
+        r.entries?.length ? `<div class="res-list">${r.entries.map(e => `<div class="res-entry"><p class="muted">${tx(e.text)}</p>${e.file ? (felFisier(e.file) === 'image' ? `<a class="file-link" href="${esc(e.file)}" target="_blank" rel="noopener">${previewFisier(e.file, 'Attached image')}<span class="sr"> (opens in a new tab)</span></a>` : previewFisier(e.file, '', e.stream)) + linkFisier(e.file, felFisier(e.file) === 'image' ? 'Open the image' : 'Open the file', `Download the file (${tipFisier(e.file)})`) : ''}</div>`).join('')}</div>`
           : `<p class="muted">${tx(r.text)}</p>`}</div>`).join('')}</div>`;
   },
   dissemination(m) {

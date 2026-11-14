@@ -6,6 +6,8 @@
 (() => {
 const S = window.SITE, C = Array.isArray(window.CLOUD) ? window.CLOUD : [];
 const src = k => (k ? '/media/' + k : '');
+// poza mica: cea urcata separat (fisierele din R2) sau marimea mica facuta de Cloudflare Images (?v=thumb)
+const small = (k, t) => (t ? src(t) : k ? src(k) + '?v=thumb' : '');
 const gol = t => /^\s*\[/.test(t || '');                       // text inca necompletat: [ ... ]
 const WHERE = ['School website', 'Facebook / Instagram', 'Press', 'School community'];
 S.extraMedia = [];                                             // poze care apar doar in Gallery (loc scris de mana sau fara loc)
@@ -41,7 +43,10 @@ const H = {
   media(it, m) {
     const st = it.stop && it.map ? m.stops.find(x => x.id === it.stop) : null;
     const place = st ? st.title : it.place || m.city;
-    const md = { type: it.kind, src: src(it.key), thumb: src(it.thumb), caption: it.caption || place, mob: m.id, stop: st ? st.id : '', place, city: m.city };
+    const stream = it.kind === 'video' && it.sv;   // video-ul sta in Cloudflare Stream: se vede in playerul lui (embed), cu imaginea lui (?v=poster)
+    const md = { type: it.kind, src: stream ? '' : src(it.key), embed: stream ? src(it.key) + '?autoplay=1' : '',
+      thumb: it.kind === 'photo' ? small(it.key, it.thumb) : src(it.thumb) || (stream ? src(it.key) + '?v=poster' : ''),
+      caption: it.caption || place, mob: m.id, stop: st ? st.id : '', place, city: m.city };
     if (st) {
       if (!st.real) { st.media = st.media.filter(x => x.src); st.real = true; }   // locurile goale dispar cand vine prima poza adevarata
       md.noGallery = !it.gallery;
@@ -52,7 +57,7 @@ const H = {
   story(it, m) {
     const d = it.day >= 0 ? m.days[it.day] : null;
     const body = it.body.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
-    const photos = it.photos.map(p => ({ type: 'photo', src: src(p.key), thumb: src(p.thumb), caption: p.caption || it.title, mob: m.id, stop: '', place: m.city, city: m.city }));
+    const photos = it.photos.map(p => ({ type: 'photo', src: src(p.key), thumb: small(p.key, p.thumb), caption: p.caption || it.title, mob: m.id, stop: '', place: m.city, city: m.city }));
     const e = { id: 's-' + it.id, mob: m.id, day: d ? d.day : 'Story',
       date: d ? d.date : new Date(it.t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
       title: it.title, excerpt: it.excerpt || (body[0] || '').slice(0, 180), author: it.author,
@@ -68,14 +73,14 @@ const H = {
   /* ---- 2. Learning materials ---- */
   material(it, m) {
     const slot = it.slot && m.materials.find(x => x.cat === it.cat && x.title === it.slot && !x.file);
-    if (slot) { slot.file = src(it.key); if (it.by) slot.by = it.by; return; }
+    if (slot) { slot.file = src(it.key); slot.stream = !!it.sv; if (it.by) slot.by = it.by; return; }
     m.materials = m.materials.filter(x => !(x.cat === it.cat && gol(x.title)));
-    m.materials.push({ cat: it.cat, title: it.title || it.slot, by: it.by, file: src(it.key) });
+    m.materials.push({ cat: it.cat, title: it.title || it.slot, by: it.by, file: src(it.key), stream: !!it.sv });
   },
   /* ---- 4. Evaluation & results: textele se aduna unul sub altul ---- */
   result(it, m) {
     const r = m.results[it.sec]; if (!r) return;
-    (r.entries = r.entries || []).push({ text: it.text, file: src(it.key) });
+    (r.entries = r.entries || []).push({ text: it.text, file: src(it.key), stream: !!it.sv });
   },
   /* ---- 5. Dissemination ---- */
   link(it, m) {

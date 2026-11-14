@@ -96,7 +96,7 @@ Pozele le pui de exemplu in `media/poze/` si scrii in data.js:
 Pagina `upload.html`: cere o parola, apoi arata formularul prin care se urca poze, video-uri, articole, materiale, rezultate, linkuri si (doar profesorii si adminul) informatiile mobilitatii, zilele si locurile de pe harta. Ce se urca apare imediat pe site, la toata lumea. Contact a ramas pagina, dar se ajunge la ea doar din subsol (Follow).
 
 Fisierele:
-- `_worker.js` = partea de server (ruleaza la Cloudflare, nu in browser). Verifica parolele, primeste fisierele, le pune in R2 si tine in baza de date D1 cine a urcat ce. Sus in fisier sunt limitele (`MAX`: poza 25 MB, video 300 MB, document 100 MB).
+- `_worker.js` = partea de server (ruleaza la Cloudflare, nu in browser). Verifica parolele, primeste fisierele, le pune in R2 (sau in Cloudflare Images / Stream, vezi mai jos) si tine in baza de date D1 cine a urcat ce. Sus in fisier sunt limitele (`MAX`: poza 25 MB, video 300 MB, document 100 MB).
 - `_routes.json` = spune Cloudflare ca doar `/api/...` si `/media/...` trec prin server; restul site-ului se da direct.
 - `assets/js/upload.js` = pagina UPLOAD. `assets/js/cloud.js` = adauga ce s-a urcat peste `data.js`, pe toate paginile.
 - stilul e la finalul lui `assets/css/pages.css` (clasele `.up-...`).
@@ -114,8 +114,25 @@ Parolele:
 - Dupa 8 parole gresite de pe aceeasi adresa, urmeaza 15 minute de pauza.
 - Parolele nu sunt nicaieri in fisierele site-ului. In browser ramane doar un cod de acces al dispozitivului (`localStorage`, „erasmus-upload”), de aceea nu mai cere parola a doua oara.
 
+### Pozele in Cloudflare Images, video-urile in Cloudflare Stream
+Cu pachetul „Images & Stream Starter Bundle” (5 $ pe luna), pozele noi se tin in Cloudflare Images, iar video-urile noi in Cloudflare Stream. Documentele (PDF, PowerPoint, Word...) raman in R2.
+
+Ce trebuie legat o singura data de proiectul Cloudflare Pages (Settings > Variables and Secrets), si la Production, si la Preview:
+- `CF_ACCOUNT_ID` = variabila simpla: Account ID-ul contului (32 de caractere, se vede in dashboard)
+- `CF_MEDIA_TOKEN` = secret: un API token cu drepturile „Cloudflare Images: Edit” si „Stream: Edit”
+Dupa ce le pui, e nevoie de o publicare noua (Retry deployment). Fara ele, totul merge in R2, ca inainte.
+
+Cum merge:
+- O poza se urca o singura data (latura lunga 2560 px). Cloudflare face din ea si poza mica pentru liste (640 px) si o da fiecarui browser in formatul cel mai usor pe care il stie. Cele doua marimi („full” si „thumb”) le face serverul singur, la prima poza.
+- Un video se vede in playerul Stream, care alege singur calitatea dupa internetul fiecaruia. Imediat dupa upload, Stream il prelucreaza (de obicei cam un minut); pana atunci playerul spune ca video-ul se prelucreaza.
+- Adresele din pagini au ramas `/media/...`: serverul trimite de acolo browserul la poza sau la player. De aceea o postare pusa in Trash dispare in continuare de pe site, iar la stergerea definitiva fisierul e sters si din Images / Stream.
+- In UPLOAD, adminul vede sub „Access keys & devices” trei contoare: R2, poze (din 100.000) si minute de video (din 1.000). Daca Images sau Stream dau o eroare, fisierul ajunge in R2 si eroarea apare acolo, sub contoare.
+- Cand minutele de video se termina, video-urile noi merg in R2 (nu se plateste nimic in plus). Daca iei mai multe minute, schimba `STREAM_MAX_MIN` sus in `_worker.js` (la fel `IMAGES_MAX` pentru poze).
+- Ce a fost urcat inainte in R2 ramane acolo si merge la fel.
+- Pozele mai mari de 10 MB dupa micsorare si formatele pe care Images nu le primeste (AVIF) raman in R2.
+
 Ce se intampla cu fisierele:
-- Pozele se micsoreaza in browser inainte de upload (latura lunga 2560 px, WebP la calitate 90%, plus una mica pentru liste). Setarile: `PHOTO`, sus in `upload.js`. Asa dispare si locul (GPS) din datele pozei.
+- Pozele se micsoreaza in browser inainte de upload (latura lunga 2560 px, WebP la calitate 90%; cand pozele merg in R2, urca si una mica pentru liste). Setarile: `PHOTO`, sus in `upload.js`. Asa dispare si locul (GPS) din datele pozei.
 - Video-urile urca asa cum sunt, cele mari in bucati de 20 MB. PDF-ul se deschide in pagina; PowerPoint si Word se descarca.
 - Pozele adevarate apar in Gallery inaintea locurilor goale, iar articolele scrise inaintea celor goale din Journal. Cand un loc primeste prima poza, locurile lui goale dispar.
 - La Results textele se aduna unul sub altul. „Mobility info” si „Days & places” inlocuiesc ce era.

@@ -88,6 +88,7 @@ const MSG = {
   key_expired: 'This key has expired. Ask your teacher or admin for a new one.', key_locked: 'This key is locked for new devices.',
   device_limit: 'This key reached the maximum number of devices.',
   too_many_uploads: 'Too many unfinished large uploads. Wait a moment and try again.',
+  upload_failed: 'The upload was interrupted. Try again.',
   not_allowed: 'Your key does not allow this.', missing_field: 'Something is missing. Check the fields above.', bad_link: 'The link has to start with https://',
   key_taken: 'This key already exists. Choose another one.', key_too_short: 'A key needs at least 8 characters.', not_found: 'It is no longer there.',
   offline: 'No connection to the server. Check the internet and try again.',
@@ -123,11 +124,15 @@ async function api(method, path, { json, body } = {}) {
   }
   return data;
 }
-// un fisier ajunge in R2; cele mari urca in bucati, cu trei incercari pentru fiecare bucata
-async function send(blob, name, onBytes = () => {}) {
-  const q = `?name=${encodeURIComponent(name)}&size=${blob.size}`;
-  if (blob.size <= 20 * MB) { const r = await api('POST', '/files' + q, { body: blob }); onBytes(blob.size); return r.key; }
+// un fisier ajunge pe server, care il pune unde ii e locul: pozele in Cloudflare Images, video-urile in Cloudflare Stream,
+// restul in R2 (stored tine minte unde a ajuns fiecare). Cele mari urca in bucati, cu trei incercari pentru fiecare bucata.
+// dur = durata unui video, in secunde (daca browserul a putut-o citi): serverul tine cu ea socoteala minutelor din Stream.
+const stored = new Map();
+async function send(blob, name, onBytes = () => {}, dur = 0) {
+  const q = `?name=${encodeURIComponent(name)}&size=${blob.size}${dur > 0 ? `&dur=${Math.round(dur * 10) / 10}` : ''}`;
+  if (blob.size <= 20 * MB) { const r = await api('POST', '/files' + q, { body: blob }); stored.set(r.key, r.store || 'r2'); onBytes(blob.size); return r.key; }
   const up = await api('POST', '/files/parts' + q), parts = [];
+  stored.set(up.key, up.store || 'r2');
   try {
     for (let n = 1, at = 0; at < blob.size; n++, at += up.partSize) {
       const chunk = blob.slice(at, at + up.partSize);
@@ -194,7 +199,7 @@ function poster(file) {
     const t = setTimeout(() => done(null), 8000);
     v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = url;
     v.onloadeddata = () => { v.currentTime = Math.min(1, (v.duration || 2) / 2); };
-    v.onseeked = () => draw(v, v.videoWidth, v.videoHeight, PHOTO.thumb, PHOTO.thumbQ).then(d => done({ ...d, vw: v.videoWidth, vh: v.videoHeight }), () => done(null));
+    v.onseeked = () => draw(v, v.videoWidth, v.videoHeight, PHOTO.thumb, PHOTO.thumbQ).then(d => done({ ...d, vw: v.videoWidth, vh: v.videoHeight, dur: isFinite(v.duration) ? v.duration : 0 }), () => done(null));
     v.onerror = () => done(null);
   });
 }
@@ -369,7 +374,9 @@ async function sendDoc(f, label) {
 }
 async function sendPhoto(file) {
   const { full, thumb } = await shrink(file), base = file.name.replace(/\.[^.]+$/, '');
-  return { key: await send(full.blob, `${base}.${full.ext}`), thumb: await send(thumb.blob, `${base}-small.${thumb.ext}`), w: full.w, h: full.h };
+  const key = await send(full.blob, `${base}.${full.ext}`);
+  // in Cloudflare Images poza mica se face singura, din cea mare: nu mai trebuie urcata separat
+  return { key, thumb: stored.get(key) === 'images' ? '' : await send(thumb.blob, `${base}-small.${thumb.ext}`), w: full.w, h: full.h };
 }
 async function publish() {
   const m = mob();
@@ -389,7 +396,7 @@ async function publish() {
         if (kindOf(f.file) === 'video') {
           const p = await poster(f.file);
           let sent = 0;
-          const key = await send(f.file, f.file.name, n => { sent += n; progress(label, (before + sent) / total); });
+          const key = await send(f.file, f.file.name, n => { sent += n; progress(label, (before + sent) / total); }, p?.dur);
           const thumb = p ? await send(p.blob, f.file.name.replace(/\.[^.]+$/, '') + `-poster.${p.ext}`) : '';
           await post('media', { ...base, key, thumb, w: p?.vw, h: p?.vh });
         } else await post('media', { ...base, ...await sendPhoto(f.file) });
@@ -476,7 +483,7 @@ async function go() {
 }
 
 /* ---------- dreapta: cine esti, ce ai urcat, Trash, parole si dispozitive (DOM fara innerHTML pt. protectie XSS) ---------- */
-let items = null, trash = [], storage = null, shown = 8, trashShown = 8, keys = null, newKey = null, newKeyJustMade = false;
+let items = null, trash = [], storage = null, cloud = null, shown = 8, trashShown = 8, keys = null, newKey = null, newKeyJustMade = false;
 let sideTab = 'live', filterText = '', filterMob = 'all', filterType = 'all', kRoleDraft = 'student';
 const LABEL = { media: 'Photo', story: 'Journal', material: 'Material', result: 'Results', link: 'Link', info: 'Mobility info', day: 'Day', stop: 'Place' };
 function describe(it) {
@@ -542,15 +549,19 @@ function renderItemList() {
 }
 function buildKeysCard(errBox) {
   const sec = el('section', { class: 'glass card up-side' }, el('span', { class: 'eyebrow', text: 'Access keys & devices' }));
-  if (storage && storage.maxBytes) {
-    const pct = Math.min(100, Math.round((storage.usedBytes / storage.maxBytes) * 100));
-    sec.appendChild(el('div', { class: 'up-meter' },
-      el('div', { class: 'up-meter-top' },
-        el('span', { text: 'R2 storage' }),
-        el('b', { text: `${size(storage.usedBytes)} / ${size(storage.maxBytes)}` })
-      ),
-      el('div', { class: 'up-bar' }, el('i', { style: `width:${pct}%` }))
-    ));
+  const meter = (name, value, used, max, note) => sec.appendChild(el('div', { class: 'up-meter' },
+    el('div', { class: 'up-meter-top' }, el('span', { text: name }), el('b', { text: value })),
+    el('div', { class: 'up-bar' }, el('i', { style: `width:${Math.min(100, Math.round((used / max) * 100))}%` })),
+    note ? el('small', { class: 'up-help', text: note }) : null));
+  // cand Images & Stream sunt legate, in R2 raman doar documentele (si pozele / video-urile urcate inainte)
+  if (storage && storage.maxBytes) meter(cloud?.on ? 'R2 storage (documents)' : 'R2 storage', `${size(storage.usedBytes)} / ${size(storage.maxBytes)}`, storage.usedBytes, storage.maxBytes);
+  if (cloud?.on) {
+    const im = cloud.images, sv = cloud.stream, n = x => Number(x).toLocaleString('en-GB');
+    meter('Photos (Cloudflare Images)', `${n(im.count)} / ${n(im.max)}`, im.count, im.max, im.count >= im.max ? 'Full: new photos are stored in R2.' : '');
+    meter('Videos (Cloudflare Stream)', `${n(sv.minutes)} / ${n(sv.max)} min`, sv.minutes, sv.max,
+      [sv.minutes >= sv.max ? 'Full: new videos are stored in R2.' : '', sv.pending ? `${sv.pending} still processing.` : '', sv.failed ? `${sv.failed} could not be processed.` : ''].filter(Boolean).join(' '));
+    if (cloud.error) sec.appendChild(el('p', { class: 'up-help up-err', role: 'status',
+      text: `Images & Stream problem on ${shortDate(cloud.error.at)} (${cloud.error.where}): ${cloud.error.msg}. Uploads that could not go there were stored in R2.` }));
   }
   if (newKey) {
     const copyBtn = el('button', { type: 'button', class: 'btn glass', text: 'Copy', on: {
@@ -674,7 +685,7 @@ async function mine() {
     const r = await api('GET', '/mine');
     items = r.items || [];
     trash = r.trash || [];
-    storage = r.storage || null;
+    storage = r.storage || null; cloud = r.cloud || null;
   } catch (e) { if (e.message === 'signed_out') return; items = items || []; }
   if (session?.me.role === 'admin') try { keys = (await api('GET', '/admin/keys')).keys; } catch (e) { keys = keys || []; }
   if (session) renderSide();
@@ -695,7 +706,7 @@ function renderSide() {
     el('p', { class: 'h3 up-name', text: me.name }),
     el('p', { class: 'up-help', text: `Key: ${me.label}. This device stays signed in.` }),
     el('button', { type: 'button', class: 'btn glass', text: 'Log out', on: {
-      click: () => { api('POST', '/logout').catch(() => {}); forget(); items = keys = newKey = null; trash = []; storage = null; gate(); }
+      click: () => { api('POST', '/logout').catch(() => {}); forget(); items = keys = newKey = null; trash = []; storage = cloud = null; gate(); }
     } })
   ));
 
@@ -844,7 +855,7 @@ async function restoreUpload(it) {
 function purgeUpload(it) {
   const [, title] = describe(it);
   dialog('Delete permanently?',
-    el('p', { class: 'muted', text: `This permanently deletes “${title}” and removes its uploaded files from R2 storage. This cannot be undone.` }),
+    el('p', { class: 'muted', text: `This permanently deletes “${title}” and removes its uploaded files from storage. This cannot be undone.` }),
     'Delete forever', () => api('DELETE', `/items/${it.id}?permanent=1`), true);
 }
 function editKeyLimits(k) {
