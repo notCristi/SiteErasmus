@@ -77,7 +77,7 @@ E o harta adevarata, cu strazi si orase, pe care se poate da zoom.
 
 ## Cum schimbi textele, pozele si harta
 Totul e in `assets/js/data.js`:
-- `project`: codul proiectului, durata, email, Instagram, numarul de elevi
+- `project`: codul proiectului, email, autoritatea finantatoare
 - `schools`: cele 3 scoli (text, profesor, site, data mobilitatii)
 - `mobilities`: cele trei mobilitati, in ordinea reala (Brasov, Orsay, Fjerritslev). Fiecare are cele 5 rubrici cerute de proiect, aceleasi la toate trei:
   - `about` = 1. About the mobility (tema, prezentarea, obiectivele, grupurile, programul PDF, o poza)
@@ -111,7 +111,9 @@ Parolele:
 - Intri cu `ADMIN_KEY` si, in dreapta, la „Access keys”, faci cate parole vrei, pe doua feluri: Students si Teachers. Parola noua se vede o singura data, atunci cand o faci.
 - Elevii pot edita si sterge doar ce au urcat de pe dispozitivul lor. Profesorii pot edita si sterge orice si vad in plus „Mobility info” si „Days & places”. Doar adminul vede cine a urcat fiecare lucru (numele scris la intrare + parola folosita).
 - „Turn off” la o parola ii scoate pe toti cei care au intrat cu ea; ce au urcat ramane. Daca schimbi `ADMIN_KEY`, iesi si tu de pe toate dispozitivele.
-- Dupa 8 parole gresite de pe aceeasi adresa, urmeaza 15 minute de pauza.
+- Dupa 1000 de parole gresite de pe aceeasi adresa, urmeaza 15 minute de pauza.
+- Elevii si profesorii raman logati pentru totdeauna pe dispozitivul lor (pana la „Log out” sau pana opresti parola). Adminul iese dupa 24 de ore fara activitate sau la 7 zile de la logare.
+- Nu exista limita zilnica de upload si nici limita de upload-uri neterminate. Ramane doar plafonul total de spatiu.
 - Parolele nu sunt nicaieri in fisierele site-ului. In browser ramane doar un cod de acces al dispozitivului (`localStorage`, „erasmus-upload”), de aceea nu mai cere parola a doua oara.
 
 ### Pozele in Cloudflare Images, video-urile in Cloudflare Stream
@@ -134,14 +136,42 @@ Cum merge:
 Ce se intampla cu fisierele:
 - Pozele se micsoreaza in browser inainte de upload (latura lunga 2560 px, WebP la calitate 90%; cand pozele merg in R2, urca si una mica pentru liste). Setarile: `PHOTO`, sus in `upload.js`. Asa dispare si locul (GPS) din datele pozei.
 - Video-urile urca asa cum sunt, cele mari in bucati de 20 MB. PDF-ul se deschide in pagina; PowerPoint si Word se descarca.
-- Pozele adevarate apar in Gallery inaintea locurilor goale, iar articolele scrise inaintea celor goale din Journal. Cand un loc primeste prima poza, locurile lui goale dispar.
+- In Gallery apar doar pozele si video-urile adevarate. Articolele scrise apar inaintea celor goale din Journal. Cand un loc primeste prima poza, locurile lui goale dispar.
 - La Results textele se aduna unul sub altul. „Mobility info” si „Days & places” inlocuiesc ce era.
+
+Cum arata pagina (ghidul pas cu pas):
+- Dupa parola: un card cu numele tau si butonul mare **Upload**, apoi **Your uploads** (ce ai urcat tu) si, pentru profesori si admin, **All uploads**. Adminul are acolo si Trash, plus parolele.
+- Upload porneste ghidul: ce urci, pentru ce mobilitate, apoi cateva intrebari scurte (depind de tip), apoi **Preview**: exact cardul sau pozele cum apar pe site. La poze, descrierea se scrie direct sub fiecare poza din preview. Pentru altceva, mergi inapoi cu Back. **Publish now** il pune pe site.
+- NEXT merge doar cand campurile obligatorii sunt scrise. La pasii optionali merge si SKIP. BACK pastreaza ce ai scris. Daca te intorci la lista, ramane un Draft cat timp pagina e deschisa.
+- Pozele urcate impreuna sunt un grup (`group` in baza de date) si apar ca un singur rand, cu „Show all”. Cele urcate inainte de asta raman cate una.
+- Editarea merge ca in aplicatiile cunoscute (Instagram, Facebook): fiecare rand din lista are butonul **...**, care deschide un meniu cu Edit, View on site si Delete.
+- **Edit** deschide un singur ecran: Cancel in stanga sus, Save in dreapta sus, toate campurile pe o pagina, iar alaturi cardul asa cum apare pe site (se schimba in timp ce scrii). Save se aprinde doar dupa ce ai schimbat ceva. Cancel cu schimbari nesalvate intreaba intai „Discard changes?”. Dupa Save te intorci la lista si jos apare „Changes saved”.
+- Nu mai exista creioanele de pe preview si nici Advanced edit. Fisierele publicate nu se pot inlocui (inca): stergi si urci din nou. In cod: `moreBtn`, `editHTML`, `editFields` si `edOptions` din `upload.js`; stilul e in ultima sectiune din `pages.css`.
+- Locurile din formular sunt grupate pe orase: campul `town` al fiecarui loc din `data.js` (fara el, orasul mobilitatii).
+- Din Trash scoate doar adminul.
+
+Partea vizuala a ghidului (noiembrie 2026):
+- In loc de liste lungi si bife, fiecare alegere e un card cu iconita sau desen: felul de upload (desene), mobilitatea (steagul), ziua (foaie de calendar), categoria, sectiunea de la Results, cine a facut materialul (steaguri). Cardul ales are margine galbena si o bifa.
+- La pasii cu un singur raspuns, ghidul trece singur la pasul urmator dupa ce alegi un card. Se opreste cu `AUTO_NEXT = false`, sus in `upload.js`.
+- Sus in card se vede ce ai ales pana acum (felul si mobilitatea). Click pe ele te duce inapoi la pasul acela. Bara de progres are cate un segment pentru fiecare pas.
+- Sub numele tau, pe prima pagina, e randul „What do you want to add?”: un click pe un card porneste ghidul direct cu felul acela.
+- Pozele alese apar ca o grila de miniaturi (cu X pe fiecare), nu ca o lista. Documentele raman pe un rand, cu foaia lor colorata.
+- Iconitele sunt in `ICON`, desenele mari in `ART`, iar textele scurte de pe carduri in `SEC_UI`, `WHERE_UI` si `INFO_UI`, toate sus in `upload.js`. Stilul e in ultima sectiune din `pages.css`.
+- Varianta de dinainte e in `site-v2-backup-2026-11-14-upload-vizual` (`upload.js` si `pages.css`). In subfolderul `inainte-de-edit` e `upload.js` cu editarea veche (creioane + Advanced edit).
+
+**Modul demo:** deschide `upload.html?demo` (merge si cu dublu click, si cu `porneste-site.bat`). Arata tot formularul fara server; nimic nu ajunge pe site si totul dispare la refresh. Orice parola merge: una care contine „admin” te baga ca admin, una cu „prof” ca profesor, restul ca elev.
 
 Ca sa il incerci pe calculator, cu server cu tot (are nevoie de Node.js), in folderul `site-v2`:
 
     npx wrangler pages dev . --d1 DB --r2 MEDIA --binding ADMIN_KEY=o-parola-de-proba
 
 si deschizi `http://localhost:8788/upload.html`. Cu `porneste-site.bat` site-ul merge, dar UPLOAD nu (acolo nu exista server).
+
+## Log-uri si erori (Cloudflare)
+- La Cloudflare **Pages**, log-urile serverului nu se salveaza. Le vezi doar live, cat timp sunt deschise: Workers & Pages > siteerasmus > alegi deployment-ul (Production sau Preview) > Functions > Real-time logs. Sau in terminal: `npx wrangler pages deployment tail`.
+- Cand serverul da o eroare 500, scrie in log o linie cu `"event":"server_error"`: metoda, adresa (`/api/...`), mesajul erorii si de unde vine. Pe pagina, raspunsul are acelasi `id` (8 caractere), ca sa gasesti usor linia potrivita in log.
+- Baza de date D1 se actualizeaza singura, o singura data. Daca schimbi tabelele (`SCHEMA` sau `MIGRATIONS` in `_worker.js`), creste `SCHEMA_VERSION` cu 1. Altfel schimbarea nu se aplica.
+- `favicon.ico`, `apple-touch-icon.png` si `robots.txt` stau in radacina, ca browserele si iPhone-urile sa nu mai primeasca 404. `robots.txt` le spune motoarelor de cautare sa nu intre pe `/api/` si pe `upload.html`.
 
 ## Cand il punem live
 Copiezi ce e in `site-v2` peste `site` (folderul `site/media` ramane cum e).

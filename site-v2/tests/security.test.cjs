@@ -283,18 +283,19 @@ test('file types by extension, PDF viewer headers, /media/* caching, Trash 404 b
   }
 });
 
-test('sessions do not expire with time and there is no daily upload limit', async () => {
+test('student and teacher sessions do not expire, admin ones do, and there is no daily upload limit', async () => {
   const worker = await loadWorker();
   const { DB, env, req } = makeHarness(worker);
   const admTok = (await (await req('/api/login', { method: 'POST', json: { key: env.ADMIN_KEY, name: 'Admin' } })).json()).token;
   const made = await (await req('/api/admin/keys', { method: 'POST', token: admTok, json: { label: 'Class', role: 'student' } })).json();
   const stuTok = (await (await req('/api/login', { method: 'POST', json: { key: made.key, name: 'Student' } })).json()).token;
 
-  // Both sessions were created and last seen a year ago: still signed in
+  // Both sessions were created and last seen a year ago: the student is still signed in, the admin is not
   const yearAgo = Date.now() - 365 * 24 * 3600 * 1000;
   DB._db.prepare('UPDATE devices SET created = ?, seen = ?').run(yearAgo, yearAgo);
-  assert.equal((await req('/api/mine', { token: admTok })).status, 200);
   assert.equal((await req('/api/mine', { token: stuTok })).status, 200);
+  assert.equal((await req('/api/mine', { token: admTok })).status, 401);
+  const admTok2 = (await (await req('/api/login', { method: 'POST', json: { key: env.ADMIN_KEY, name: 'Admin' } })).json()).token;
 
   // The student already uploaded 5 GB today: the next file still goes through
   const stuDev = DB._db.prepare("SELECT id FROM devices WHERE role != 'admin'").get().id;
@@ -303,7 +304,7 @@ test('sessions do not expire with time and there is no daily upload limit', asyn
   assert.equal((await req('/api/files?name=a.jpg&size=4', { method: 'POST', token: stuTok, body: jpg })).status, 200);
 
   // A key turned off by the admin still signs its devices out
-  assert.equal((await req(`/api/admin/keys/${made.id}`, { method: 'PUT', token: admTok, json: { active: 0 } })).status, 200);
+  assert.equal((await req(`/api/admin/keys/${made.id}`, { method: 'PUT', token: admTok2, json: { active: 0 } })).status, 200);
   assert.equal((await req('/api/mine', { token: stuTok })).status, 401);
 });
 

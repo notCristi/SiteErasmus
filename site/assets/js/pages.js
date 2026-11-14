@@ -48,31 +48,6 @@ const entryCard = (e, i = 0) => `
     </div>
   </a>`;
 
-/* ================= PRIMA PAGINA ================= */
-if (page === 'home') {
-  $('stats').innerHTML = [
-    ['3', 'Partner schools'], ['3', 'Countries'], [S.project.students, 'Students'], [S.project.days, 'Days together'],
-  ].map(([n, t], i) => `<div class="glass stat" data-reveal style="--d:${i * 0.07}s"><b>${tx(n)}</b><span>${t}</span></div>`).join('');
-
-  const cards = [
-    ['about.html', '02', 'About', 'What the project is about, our goals and the people behind it.'],
-    ['partners.html', '03', 'Partners', 'Meet the three schools from France, Denmark and Romania.'],
-    ['journal.html', '04', 'Journal', 'Stories from every trip, written by the students, day by day.'],
-    ['gallery.html', '05', 'Gallery', 'All photos and videos from the project in one place.'],
-  ];
-  $('exploreGrid').innerHTML = `
-    <a class="glass card big" href="journey.html" data-reveal>
-      <div class="mini-map">${U.europe({ slice: true, labels: false })}</div>
-      <div class="card-txt"><span class="num">01</span><h3 class="h3" style="font-size:clamp(34px,3.6vw,48px)">The journey</h3><p>A map of every trip, with photos and videos from each place we visited.</p></div>
-      <span class="arrow">${I.arrow}</span>
-    </a>
-    ${cards.map(([h, n, t, p], i) => `<a class="glass card" href="${h}" data-reveal style="--d:${0.06 * (i + 1)}s"><span class="num">${n}</span><h3 class="h3">${t}</h3><p>${p}</p><span class="arrow">${I.arrow}</span></a>`).join('')}`;
-
-  $('latest').innerHTML = S.journal.slice(0, 3).map(entryCard).join('');
-  const q = S.quote;
-  $('quote').innerHTML = `<span class="mark" aria-hidden="true">“</span><blockquote>${tx(q.text)}</blockquote><figcaption><cite><b>${tx(q.name)}</b> · ${esc(q.school)}</cite></figcaption>`;
-}
-
 /* ================= ABOUT ================= */
 if (page === 'about') {
   const P = S.project;
@@ -91,7 +66,7 @@ if (page === 'about') {
 if (page === 'partners') {
   $('schools').innerHTML = S.schools.map(s => `
     <article class="glass school" id="${s.id}" data-reveal>
-      <div class="school-media ph" style="--px:${20 + U.hash(s.id) % 60}%">${I.photo}<span>Photo · ${esc(s.name)}</span><span class="big-n" aria-hidden="true">${s.n}</span></div>
+      <div class="school-media ph" style="--px:${20 + U.hash(s.id) % 60}%">${I.photo}<span>Coming soon</span><span class="big-n" aria-hidden="true">${s.n}</span></div>
       <div class="school-txt">
         <div class="row"><span class="tag">${esc(s.country)}</span><span class="tag y">Mobility ${s.n} · ${tx(s.date)}</span></div>
         <h2 class="h2">${esc(s.name)}</h2>
@@ -103,7 +78,7 @@ if (page === 'partners') {
         </dl>
         <div class="btn-row">
           <a class="btn btn--solid" href="journey.html#${s.id}">The trip to ${esc(s.city)} ${I.arrow}</a>
-          ${s.url ? `<a class="btn glass" href="${esc(s.url)}" target="_blank" rel="noopener">School website${newTab} ${I.ext}</a>` : `<span class="btn glass" aria-disabled="true"><span class="ph-txt">[School website]</span></span>`}
+          ${s.url ? `<a class="btn glass" href="${esc(s.url)}" target="_blank" rel="noopener">School website${newTab} ${I.ext}</a>` : `<span class="btn glass" aria-disabled="true">School website · ${U.SOON}</span>`}
         </div>
       </div>
     </article>`).join('');
@@ -222,13 +197,20 @@ if (page === 'contact') {
     ${mailOK ? `<a class="mail" href="mailto:${esc(P.email)}">${esc(P.email)}</a>` : `<span class="mail">${tx(P.email)}</span>`}
     <div class="btn-row">
       ${mailOK ? `<a class="btn btn--solid" href="mailto:${esc(P.email)}">${I.mail} Send an email</a>` : ''}
-      ${P.instagramUrl ? `<a class="btn glass" href="${esc(P.instagramUrl)}" target="_blank" rel="noopener">${I.insta} ${tx(P.instagram)}${newTab}</a>` : `<span class="btn glass" aria-disabled="true">${I.insta} ${tx(P.instagram)}</span>`}
     </div>`;
   $('addrs').innerHTML = S.schools.map((s, i) => `
     <div class="glass card addr" data-reveal style="--d:${i * 0.06}s">
       <b>${esc(s.name)}</b><span>${esc(s.address)}</span>
-      ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">School website${newTab} ${I.ext}</a>` : '<span class="ph-txt">[School website]</span>'}
+      ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">School website${newTab} ${I.ext}</a>` : `<span>School website · ${U.SOON}</span>`}
     </div>`).join('');
+}
+
+/* ================= LEGAL ================= */
+if (page === 'legal') {
+  const P = S.project, mailOK = !/^\[/.test(P.email);
+  document.querySelectorAll('[data-site-email]').forEach(el => {
+    el.innerHTML = mailOK ? `<a href="mailto:${esc(P.email)}">${esc(P.email)}</a>` : tx(P.email);
+  });
 }
 
 U.reveal();

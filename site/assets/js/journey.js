@@ -420,22 +420,22 @@ const PANOURI = {
     return `
     <div class="split hub-about">
       ${a.photo ? `<div class="media pop"><img src="${esc(a.photo)}" alt="${esc(m.city)}, ${esc(m.country)}" loading="lazy" decoding="async"></div>`
-        : `<div class="ph pop" style="--px:30%;--py:20%">${I.photo}<span>Photo · ${esc(m.city)}</span></div>`}
+        : `<div class="ph pop" style="--px:30%;--py:20%">${I.photo}<span>Coming soon</span></div>`}
       <div class="pop" style="--i:1">
         ${capRubrica(m, 'about')}
         <div class="hub-tags"><span class="tag y">${tx(m.date)}</span><span class="tag">${esc(m.city)}, ${esc(m.country)}</span></div>
         <p class="hub-theme">${tx(a.theme)}</p>
-        <p class="muted">${tx(a.text)}</p>
+        ${U.isPh(a.theme) && U.isPh(a.text) ? '' : `<p class="muted">${tx(a.text)}</p>`}
       </div>
     </div>
     <div class="grid hub-grid">
-      <div class="glass card pop" style="--i:2"><h3 class="h3">Goals</h3><ul class="hub-list">${a.goals.map(g => `<li>${tx(g)}</li>`).join('')}</ul></div>
+      <div class="glass card pop" style="--i:2"><h3 class="h3">Goals</h3><ul class="hub-list">${[...new Set(a.goals.map(tx))].map(g => `<li>${g}</li>`).join('')}</ul></div>
       <div class="glass card pop" style="--i:3"><h3 class="h3">Schools and countries</h3><ul class="hub-list">${S.schools.map(s => `<li>${esc(s.name)} · ${esc(s.country)}</li>`).join('')}</ul></div>
       <div class="glass card pop" style="--i:4"><h3 class="h3">Participating groups</h3><p class="muted">${tx(a.groups)}</p></div>
       <div class="glass card pop" style="--i:5"><h3 class="h3">Programme</h3><p class="muted">The full programme of the mobility, day by day.</p>
         <div class="btn-row">${a.programme
           ? `<a class="btn btn--solid" href="${esc(a.programme)}" target="_blank" rel="noopener">Open the programme (PDF)<span class="sr"> (opens in a new tab)</span> ${I.ext}</a>`
-          : `<span class="btn glass" aria-disabled="true"><span class="ph-txt">[Programme PDF]</span></span>`}</div>
+          : `<span class="btn glass" aria-disabled="true">${U.SOON}</span>`}</div>
       </div>
     </div>`;
   },
@@ -448,14 +448,14 @@ const PANOURI = {
       <section class="mat-cat">
         <div class="mat-head"><span class="mat-letter" aria-hidden="true">${c.id.toUpperCase()}</span><div><h3 class="h3">${esc(c.name)}</h3><p class="muted">${esc(c.text)}</p></div></div>
         <div class="grid mat-list">${items.map(x => {
-          const inner = `<span class="tag b">${x.file ? tipFisier(x.file) : 'Coming soon'}</span><b>${tx(x.title)}</b>${x.by ? `<span class="small">${tx(x.by)}</span>` : ''}`;
+          const inner = `${U.isPh(x.title) ? '' : `<span class="tag b">${x.file ? tipFisier(x.file) : 'Coming soon'}</span>`}<b>${tx(x.title)}</b>${x.by && !U.isPh(x.by) ? `<span class="small">${esc(x.by)}</span>` : ''}`;
           if (!x.file) return `<div class="glass card mat pop" style="--i:${k++}">${inner}</div>`;
           const fel = felFisier(x.file), prev = previewFisier(x.file, x.title, x.stream);
           if (fel === 'video' || fel === 'audio') return `<div class="glass card mat mat--play pop" style="--i:${k++}">${prev}${inner}</div>`;   // se reda direct in card
           return fel === 'download'
             ? `<a class="glass card mat pop" style="--i:${k++}" href="${esc(x.file)}" download>${inner}<span class="link-arrow">Download ${I.ext}</span></a>`
             : `<a class="glass card mat pop" style="--i:${k++}" href="${esc(x.file)}" target="_blank" rel="noopener">${prev}${inner}<span class="link-arrow">Open<span class="sr"> (opens in a new tab)</span> ${I.ext}</span></a>`;
-        }).join('') || '<p class="glass entries-empty">Nothing here yet.</p>'}</div>
+        }).join('') || `<p class="glass entries-empty">${U.SOON}</p>`}</div>
       </section>`;
       }).join('');
   },
@@ -481,7 +481,8 @@ function zile() {
   const m = S.mob(mob);
   $('days').innerHTML = capRubrica(m, 'daily', '<p class="muted">Every day of the mobility, in order. Below, the places we visited are on the map, with photos and videos.</p>') +
     `<div class="grid days-list">${m.days.map((d, i) => {
-      const inner = `<div class="entry-meta"><span class="tag b">${tx(d.day)}</span><span>${tx(d.date)}</span></div><b>${tx(d.title)}</b><p>${tx(d.text)}</p>`;
+      const gol = U.isPh(d.title);   // zi necompletata: doar „Coming soon”, o singura data
+      const inner = `<div class="entry-meta"><span class="tag b">${tx(d.day)}</span>${U.isPh(d.date) ? '' : `<span>${esc(d.date)}</span>`}</div><b>${tx(d.title)}</b>${gol && U.isPh(d.text) ? '' : `<p>${tx(d.text)}</p>`}`;
       return S.journal.some(e => e.id === d.journal)
         ? `<a class="glass card mat day pop" style="--i:${i}" href="journal.html#${esc(d.journal)}">${inner}<span class="link-arrow">Read the day ${I.arrow}</span></a>`
         : `<div class="glass card mat day pop" style="--i:${i}">${inner}</div>`;
@@ -515,7 +516,7 @@ function adresa() { history.replaceState(history.state, '', '#' + mob + (rubrica
 function info() {
   const m = S.mob(mob), s = m.stops.find(x => x.id === activ);
   $('mapBox').innerHTML = s
-    ? `<b>${m.stops.indexOf(s) + 1}. ${tx(s.title)}</b><span>${tx(s.when)} · ${nMedia(s.media.length)}</span>`
+    ? `<b>${m.stops.indexOf(s) + 1}. ${tx(s.title)}</b><span>${U.isPh(s.when) ? '' : esc(s.when) + ' · '}${nMedia(s.media.length)}</span>`
     : `<b>${esc(m.city)}, ${esc(m.country)}</b><span>Mobility ${m.n} · ${tx(m.date)} · Tap a pin to see the place</span>`;
   $('mapLegend').textContent = `Mobility ${m.n} · ${m.city}`;
 }
@@ -536,8 +537,8 @@ function locuri() {
     const { f, html, count } = mediaLoc(s);
     return `
     <article class="glass card stop${s.id === activ ? ' on' : ''}" id="stop-${s.id}" data-stop="${s.id}">
-      <div class="stop-head"><span class="stop-n">${i + 1}</span><div><h3>${tx(s.title)}</h3><div class="when">${tx(s.when)}</div></div></div>
-      <p>${tx(s.text)}</p>
+      <div class="stop-head"><span class="stop-n">${i + 1}</span><div><h3>${tx(s.title)}</h3>${U.isPh(s.when) ? '' : `<div class="when">${esc(s.when)}</div>`}</div></div>
+      ${U.isPh(s.title) && U.isPh(s.text) ? '' : `<p>${tx(s.text)}</p>`}
       <div class="stop-media">${html}</div>
       <div class="stop-foot">
         <div class="seg glass" role="group" aria-label="Filter media">${[['all', 'All'], ['photo', 'Photos'], ['video', 'Videos']].map(([id, t]) => `<button type="button" data-f="${id}" aria-pressed="${id === f}">${t}</button>`).join('')}</div>

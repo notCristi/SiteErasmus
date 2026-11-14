@@ -35,7 +35,6 @@ const I = {
   video: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 8.5v7l5.5-3.5z" fill="currentColor"/></svg>',
   pin: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14.5s4.5-4.2 4.5-7.8a4.5 4.5 0 0 0-9 0c0 3.6 4.5 7.8 4.5 7.8z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="6.6" r="1.6" fill="currentColor"/></svg>',
   mail: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3.5" width="12" height="9" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M2.5 4.5L8 9l5.5-4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
-  insta: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="3.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="11.4" cy="4.6" r=".8" fill="currentColor"/></svg>',
 };
 
 /* ---------- steagul UE ---------- */
@@ -60,9 +59,11 @@ function euRect() {
   return `<svg viewBox="0 0 810 540" role="img" aria-label="Flag of the European Union"><rect width="810" height="540" fill="#003399"/><path d="${d}" fill="#FFCC00"/></svg>`;
 }
 
-/* ---------- texte: [ ... ] apar colorate, ca sa se vada ce mai e de completat ---------- */
+/* ---------- texte: tot ce are [ ... ] (necompletat) apare pe site ca „Coming soon” ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const tx = s => esc(s).replace(/\[[^\]]+\]/g, m => `<span class="ph-txt">${m}</span>`);
+const isPh = s => /\[[^\]]+\]/.test(String(s ?? ''));
+const SOON = '<span class="ph-txt">Coming soon</span>';
+const tx = s => isPh(s) ? SOON : esc(s);
 const hash = s => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
 
 /* ---------- poza / video sau locul gol pentru ele ---------- */
@@ -73,7 +74,7 @@ function tile(m, cls = '') {
   if (m.src && m.type === 'video') return `<div class="media ${cls}"><video src="${esc(m.src)}" ${m.poster || m.thumb ? `poster="${esc(m.poster || m.thumb)}"` : ''} muted playsinline preload="${m.thumb ? 'none' : 'metadata'}"></video><span class="play-badge">${I.play}</span></div>`;
   // video care se vede intr-un player (Cloudflare Stream): in lista apare imaginea lui; playerul se deschide la click
   if (m.embed && m.thumb) return `<div class="media ${cls}"><img src="${esc(m.thumb)}" alt="${esc(m.caption)}" loading="lazy" decoding="async"${m.thumb.includes('v=poster') ? ` data-poster="${esc(m.thumb)}"` : ''}><span class="play-badge">${I.play}</span></div>`;
-  return `<div class="ph ${cls}" style="--px:${15 + h % 70}%;--py:${5 + (h >> 7) % 50}%">${m.type === 'video' ? I.video : I.photo}<span>${esc(label)} · ${esc(m.place || '')}</span>${m.embed ? `<span class="play-badge">${I.play}</span>` : ''}</div>`;
+  return `<div class="ph ${cls}" style="--px:${15 + h % 70}%;--py:${5 + (h >> 7) % 50}%">${m.type === 'video' ? I.video : I.photo}<span>Coming soon</span>${m.embed ? `<span class="play-badge">${I.play}</span>` : ''}</div>`;
 }
 // imaginea unui video din Stream exista abia dupa ce Stream l-a prelucrat (cam un minut de la upload):
 // pana atunci ramane fundalul cardului si se mai incearca de cateva ori, fara semnul de poza lipsa
@@ -167,7 +168,7 @@ if (sheet) {
           <p class="disc">Views and opinions expressed are however those of the author(s) only and do not necessarily reflect those of the European Union or ${tx(P.grantAuthority)}. Neither the European Union nor the granting authority can be held responsible for them.<br>Project code: ${tx(P.code)}</p>
         </div>
         <div><h4>Project</h4><ul>${LINKS.slice(0, 5).map(([, t, h]) => `<li><a href="${h}">${t}</a></li>`).join('')}</ul></div>
-        <div><h4>Legal</h4><ul><li><a href="legal.html#privacy">Privacy policy</a></li><li><a href="legal.html#photos">Photo consent</a></li><li><a href="legal.html#credits">Credits</a></li></ul></div>
+        <div><h4>Legal</h4><ul><li><a href="legal.html#privacy">Privacy policy</a></li><li><a href="legal.html#photos">Photos</a></li><li><a href="legal.html#credits">Credits</a></li></ul></div>
         <div><h4>Follow</h4><ul><li><a href="contact.html">Contact</a></li></ul></div>
       </div>
       <div class="foot-schools">${S.schools.map(s => `<span class="tag">${esc(s.name)} · ${esc(s.country)}</span>`).join('')}</div>
@@ -275,7 +276,7 @@ function segSet(seg, attr, isOn) {
   segPill(seg);
 }
 
-window.UI = { I, esc, tx, tile, euDisc, euRect, reveal, lightbox: lbOpen, hash, segPill, segSet,
+window.UI = { I, esc, tx, isPh, SOON, tile, euDisc, euRect, reveal, lightbox: lbOpen, hash, segPill, segSet,
   closeOverlays() { if (sheet?.classList.contains('open')) menu(false); if (!lb.hidden) lbClose(); },
 };
 document.addEventListener('DOMContentLoaded', () => reveal());

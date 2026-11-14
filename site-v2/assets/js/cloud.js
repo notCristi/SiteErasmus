@@ -9,13 +9,11 @@ const src = k => (k ? '/media/' + k : '');
 // poza mica: cea urcata separat (fisierele din R2) sau marimea mica facuta de Cloudflare Images (?v=thumb)
 const small = (k, t) => (t ? src(t) : k ? src(k) + '?v=thumb' : '');
 const gol = t => /^\s*\[/.test(t || '');                       // text inca necompletat: [ ... ]
-const WHERE = ['School website', 'Facebook / Instagram', 'Press', 'School community'];
+const WHERE = ['School website', 'Facebook', 'Press', 'School community', 'Press releases & promotion'];
 S.extraMedia = [];                                             // poze care apar doar in Gallery (loc scris de mana sau fara loc)
-// Gallery = pozele de la locuri + cele doar pentru Gallery; pozele adevarate stau inaintea locurilor inca goale
-S.allMedia = () => {
-  const all = [...S.mobilities.flatMap(m => m.stops.flatMap(st => st.media.filter(x => !x.noGallery))), ...S.extraMedia];
-  return [...all.filter(x => x.src || x.embed), ...all.filter(x => !x.src && !x.embed)];
-};
+// Gallery = pozele de la locuri + cele doar pentru Gallery; doar pozele si video-urile adevarate, fara locuri goale
+S.allMedia = () => [...S.mobilities.flatMap(m => m.stops.flatMap(st => st.media.filter(x => !x.noGallery))), ...S.extraMedia]
+  .filter(x => x.src || x.embed);
 if (!C.length) return;
 
 const H = {
@@ -58,8 +56,11 @@ const H = {
     const d = it.day >= 0 ? m.days[it.day] : null;
     const body = it.body.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
     const photos = it.photos.map(p => ({ type: 'photo', src: src(p.key), thumb: small(p.key, p.thumb), caption: p.caption || it.title, mob: m.id, stop: '', place: m.city, city: m.city }));
-    const e = { id: 's-' + it.id, mob: m.id, day: d ? d.day : 'Story',
-      date: d ? d.date : new Date(it.t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    // mai multe zile (it.days = [prima, ultima]): "Monday – Wednesday", "16 – 18 November"
+    const a = !d && it.days && m.days[it.days[0]], b = a && m.days[it.days[1]];
+    const span = (x, y) => { const [nx, mx] = String(x).split(' '), [, my] = String(y).split(' '); return mx && mx === my ? `${nx} – ${y}` : `${x} – ${y}`; };
+    const e = { id: 's-' + it.id, mob: m.id, day: d ? d.day : b ? `${a.day} – ${b.day}` : 'Story',
+      date: d ? d.date : b ? span(a.date, b.date) : new Date(it.t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
       title: it.title, excerpt: it.excerpt || (body[0] || '').slice(0, 180), author: it.author,
       min: String(Math.max(1, Math.round(it.body.split(/\s+/).length / 200))), body,
       cover: photos[0] ? photos[0].thumb || photos[0].src : '', coverFull: photos[0] ? photos[0].src : '', photos, t: it.t, di: d ? it.day : 99 };

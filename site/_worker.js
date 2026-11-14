@@ -25,6 +25,8 @@ const IMAGE_VARIANTS = { full: 2560, thumb: 640 };               // marimile in 
 const STREAM_MAX_MIN = 1000;                                     // cate minute de video intra in pachet (Stream); peste, video-urile noi merg in R2
 const CF_API = 'https://api.cloudflare.com/client/v4/accounts/';
 const MEDIA_CACHE = 'public, max-age=2592000';                   // pozele si clipurile raman 30 de zile in memoria browserului
+const ADMIN_IDLE_MS = 24 * 3600 * 1000;                          // sesiunea de admin expira dupa 24h de inactivitate
+const ADMIN_MAX_MS = 7 * 24 * 3600 * 1000;                       // ...sau la 7 zile de la autentificare
 const TRASH_DAYS_MS = 7 * 24 * 3600 * 1000;                      // postarile ascunse se sterg definitiv dupa 7 zile
 const ORPHAN_MS = 24 * 3600 * 1000;                              // fisierele nepublicate/intrerupte se curata dupa 24h
 const FILES = {
@@ -76,15 +78,17 @@ const MIGRATIONS = [
   `ALTER TABLE files ADD COLUMN ready INTEGER NOT NULL DEFAULT 1`,  // Stream: 0 = inca se prelucreaza, 1 = gata, -1 = nu a putut fi prelucrat
   `CREATE INDEX IF NOT EXISTS files_store ON files (store, ready)`,
 ];
-const SCHEMA_V = '3';   // se schimba de fiecare data cand se adauga ceva in MIGRATIONS
+const SCHEMA_V = '3';   // creste-l cu 1 de fiecare data cand schimbi SCHEMA sau MIGRATIONS (asa baza se actualizeaza o singura data)
 let schemaReady = null, lastCleanup = 0;
 function ready(env) {
   if (!schemaReady) schemaReady = (async () => {
+    // 1 singura citire: daca baza e deja la zi, nu mai rulam CREATE / ALTER
+    const v = await env.DB.prepare("SELECT v FROM meta WHERE k = 'schema'").first('v').catch(() => null);
+    if (v === SCHEMA_V) return;
     await env.DB.batch(SCHEMA.map(q => env.DB.prepare(q)));
-    const v = await env.DB.prepare("SELECT v FROM meta WHERE k = 'schema'").first('v');
-    if (v === SCHEMA_V) return;   // coloanele noi exista deja
-    for (const q of MIGRATIONS) await env.DB.prepare(q).run().catch(() => {});
+    for (const q of MIGRATIONS) await env.DB.prepare(q).run().catch(() => {});   // coloana exista deja = eroare normala
     await env.DB.prepare("INSERT INTO meta (k, v) VALUES ('schema', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(SCHEMA_V).run();
+    console.log(JSON.stringify({ event: 'schema_updated', version: SCHEMA_V }));
   })().catch(e => { schemaReady = null; throw e; });
   return schemaReady;
 }
@@ -141,6 +145,7 @@ async function auth(request, env) {
   const now = Date.now();
   if (dev.role === 'admin') {
     if (!adminOn(env) || !(await same(dev.adm || '', await adminHash(env)))) return null;   // parola de admin schimbata = toti adminii ies
+    if (now - dev.seen > ADMIN_IDLE_MS || now - dev.created > ADMIN_MAX_MS) return null;   // doar adminul iese singur: 24h fara activitate sau 7 zile
   } else {
     if (!dev.k_active) return null;                                                          // parola anulata = toti cei cu ea ies
     if (dev.k_expires > 0 && now > dev.k_expires) return null;
@@ -201,7 +206,7 @@ function maybeCleanup(env, ctx) {
   const now = Date.now();
   if (now - lastCleanup < 3600 * 1000) return;
   lastCleanup = now;
-  ctx.waitUntil(cleanup(env).catch(() => {}));
+  ctx.waitUntil(cleanup(env).catch(e => console.warn(JSON.stringify({ event: 'cleanup_failed', error: String(e && e.message || e) }))));
 }
 async function cleanup(env) {
   const now = Date.now();
@@ -630,24 +635,26 @@ function clean(type, d, old) {
     if (!video && !k.startsWith('image/')) throw new Bad('file_type');
     data = { kind: video ? 'video' : 'photo', key: k, thumb: kept('thumb', 'image'), caption: str(d.caption, 200),
       stop: /^[a-z0-9-]{1,40}$/.test(d.stop || '') ? d.stop : '', place: str(d.place, 80),
-      gallery: d.gallery !== false, map: d.map !== false, w: int(old ? old.w : d.w, 1, 20000, 0), h: int(old ? old.h : d.h, 1, 20000, 0) };
+      gallery: d.gallery !== false, map: d.map !== false, w: int(old ? old.w : d.w, 1, 20000, 0), h: int(old ? old.h : d.h, 1, 20000, 0),
+      group: /^[a-f0-9]{8,24}$/.test(old ? old.group || '' : d.group || '') ? (old ? old.group : d.group) : '' };   // pozele urcate impreuna (o serie) au acelasi group
   } else if (type === 'story') {
     const photos = (old ? old.photos || [] : Array.isArray(d.photos) ? d.photos.slice(0, 40) : []).map((p, i) => ({
       key: key(p.key, 'image'), thumb: key(p.thumb, 'image'),
       caption: str(old && Array.isArray(d.photos) && d.photos[i] ? d.photos[i].caption : p.caption, 200) })).filter(p => p.key);
-    data = { day: int(d.day, -1, 30, -1), title: str(d.title, 120, { req: true }), excerpt: str(d.excerpt, 300),
+    const days = Array.isArray(d.days) && d.days.length === 2 ? d.days.map(n => int(n, 0, 30, 0)) : [];   // articol de mai multe zile: prima si ultima zi
+    data = { day: int(d.day, -1, 30, -1), days: days.length && days[1] > days[0] ? days : [], title: str(d.title, 120, { req: true }), excerpt: str(d.excerpt, 300),
       body: str(d.body, 20000, { req: true, lines: true }), author: str(d.author, 60), photos };
   } else if (type === 'material') {
     const k = kept('key'); if (!k) throw new Bad('missing_file');   // orice fel de fisier permis: document, poza, video, sunet
     data = { cat: ['a', 'b', 'c', 'd'].includes(d.cat) ? d.cat : 'a', slot: str(d.slot, 160), title: str(d.title, 160), by: str(d.by, 120), key: k };
     if (!data.slot && !data.title) throw new Bad('missing_field');
   } else if (type === 'result') {
-    data = { sec: int(d.sec, 0, 4, 0), text: str(d.text, 4000, { req: true, lines: true }), key: kept('key') };
+    data = { sec: int(d.sec, 0, 5, 0), text: str(d.text, 4000, { req: true, lines: true }), key: kept('key') };
   } else if (type === 'link') {
     const url = str(d.url, 500, { req: true });
     let ok = false; try { ok = ['http:', 'https:'].includes(new URL(url).protocol); } catch (e) {}
     if (!ok) throw new Bad('bad_link');
-    data = { where: int(d.where, 0, 3, 0), title: str(d.title, 160, { req: true }), url };
+    data = { where: int(d.where, 0, 4, 0), title: str(d.title, 160, { req: true }), url };
   } else if (type === 'info') {
     const part = ['programme', 'photo', 'text', 'goals', 'groups'].includes(d.part) ? d.part : '';
     if (!part) throw new Bad('missing_field');
@@ -730,7 +737,7 @@ async function deleteItem(request, env, ctx, dev, id, url) {
   return json({ ok: true });
 }
 async function restoreItem(request, env, ctx, dev, id) {
-  if (!staff(dev)) throw new Bad('not_allowed', 403);
+  if (dev.role !== 'admin') throw new Bad('not_allowed', 403);   // din Trash scoate doar adminul
   const row = /^[a-f0-9]{16}$/.test(id) && await env.DB.prepare('SELECT * FROM items WHERE id = ? AND deleted = 1').bind(id).first();
   if (!row) throw new Bad('not_found', 404);
   const now = Date.now();
@@ -981,8 +988,16 @@ export default {
       }
     } catch (e) {
       if (e instanceof Bad) return json({ error: e.code }, e.status);
-      console.error(e);
-      return json({ error: 'server_error' }, 500);
+      // Apare in Cloudflare: Workers & Pages > siteerasmus > deployment > Functions > Real-time logs
+      // (sau: npx wrangler pages deployment tail). Fara parole, tokenuri sau continut de fisiere.
+      const id = crypto.randomUUID().slice(0, 8);
+      console.error(JSON.stringify({
+        event: 'server_error', id,
+        method: request.method, path: url.pathname,
+        error: String(e && e.message || e), name: e && e.name,
+        stack: e && e.stack ? String(e.stack).split('\n').slice(0, 6).join(' | ') : undefined,
+      }));
+      return json({ error: 'server_error', id }, 500);
     }
     return env.ASSETS.fetch(request);   // restul site-ului: fisierele obisnuite
   },

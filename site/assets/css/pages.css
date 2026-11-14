@@ -354,6 +354,7 @@ select.up-input option{color:#10204A;background:#fff}
 .up-file-n small{font-size:12px;color:var(--text-3)}
 .up-cap{flex:2 1 220px;height:40px}
 .up-x,.up-ic{flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;border:0;background:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.22);color:#fff;cursor:pointer;transition:background .2s ease,scale .3s var(--spring)}
+.up-ic--text{width:auto;padding:0 16px;border-radius:999px;font:600 15px var(--font)}
 .up-x svg{width:16px;height:16px}
 :is(.up-x,.up-ic):hover{background:rgba(255,255,255,.2)}
 /* bara de publicare */
@@ -436,3 +437,502 @@ iframe.file-prev{border:0;aspect-ratio:16/9}
 .file-link{display:block}
 .res-entry .file-prev{max-width:520px}
 .mat--play{cursor:default}
+
+/* =========================================================
+   UPLOAD, ghidul pas cu pas (assets/js/upload.js)
+   Lista: cine esti + butonul mare Upload, apoi Your uploads / All uploads.
+   Ghidul: un card cu pasul curent, bara galbena de progres si Back / Skip / Next jos.
+   ========================================================= */
+#uploadRoot{display:flex;flex-direction:column;gap:22px}
+/* cine esti + butonul mare */
+.up-me{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:22px}
+.up-me-t{display:flex;flex-direction:column;gap:8px;min-width:0;flex:1 1 320px}
+.up-me-t .up-help{font-size:14px;max-width:560px}
+.up-me-t .tag{margin-left:6px}
+.up-me-a{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.btn.up-big{min-height:80px;padding:0 46px;gap:14px;font-size:21px;font-weight:700;letter-spacing:.01em}
+.btn.up-big svg{width:26px;height:26px}
+.up-draft{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;box-shadow:inset 0 0 0 1.5px rgba(255,204,0,.55),0 24px 60px -28px rgba(0,0,0,.75)}
+.up-draft > div:first-child{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.up-draft b{font:700 24px/1.05 var(--disp);text-transform:uppercase;color:#fff}
+/* listele */
+.up-lists{display:flex;flex-direction:column;gap:22px}
+.up-listcard{gap:14px}
+.up-list-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.up-list-head .seg button{height:34px;font-size:13px}
+.up-scroll{max-height:400px;overflow-y:auto;margin-right:-8px;padding-right:8px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.3) transparent}
+.up-list .up-row-li{display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:14px 0;border-top:1px solid var(--linie)}
+.up-li-row{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.up-li{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+.up-acts{display:flex;align-items:center;gap:6px}
+.up-sm{min-height:40px;padding:0 14px;font-size:13px}
+.up-empty{padding:14px 0;border-top:1px solid var(--linie)}
+.up-sub{list-style:none;margin:0 0 0 28px;padding:4px 0 4px 18px;border-left:1px solid var(--linie);display:flex;flex-direction:column;gap:8px}
+.up-sub li{display:flex;align-items:center;gap:12px}
+.up-sub .th{--t:44px}
+/* miniaturile din lista: poza, teanc de poze, foaie de document sau iconita */
+.th{--t:58px;position:relative;flex:none;width:var(--t);height:var(--t)}
+.th .media,.th .ph{position:absolute;inset:0;border-radius:12px;padding:0;box-shadow:0 0 0 1px rgba(255,255,255,.25),0 6px 14px -6px rgba(0,0,0,.6)}
+.th .play-badge{width:22px;height:22px;right:4px;top:4px}
+.th .play-badge svg{width:9px;height:9px}
+.th.stack .media,.th.stack .ph{inset:9%}
+.th.stack .s1{transform:rotate(-11deg) translate(-7%,3%);opacity:.7}
+.th.stack .s2{transform:rotate(8deg) translate(6%,-2%);opacity:.85}
+.th.stack .s3{transform:translateY(-3%)}
+.th-n{position:absolute;right:-7px;bottom:-7px;min-width:24px;height:24px;padding:0 7px;border-radius:999px;display:grid;place-items:center;background:var(--galben);color:var(--cerneala);font:800 14px/1 var(--disp);box-shadow:0 0 0 2px rgba(11,22,56,.85)}
+.th-badge{position:absolute;right:-6px;bottom:-6px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--crem);color:var(--cerneala);box-shadow:0 0 0 2px rgba(11,22,56,.85)}
+.th-badge svg{width:13px;height:13px}
+.doc{position:absolute;inset:0 12%;border-radius:6px 30% 6px 6px / 6px 26% 6px 6px;background:var(--c);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.25),0 6px 14px -6px rgba(0,0,0,.6)}
+.doc::after{content:'';position:absolute;right:0;top:0;width:30%;height:26%;background:linear-gradient(225deg,rgba(11,22,56,.9) 50%,rgba(255,255,255,.45) 50%)}
+.doc-l{font:800 calc(var(--t) * .38)/1 var(--disp);color:#fff}
+.doc-e{font:700 calc(var(--t) * .15)/1 var(--font);letter-spacing:.06em;color:rgba(255,255,255,.85)}
+.ico-box{position:absolute;inset:0;border-radius:14px;display:grid;place-items:center;color:var(--albastru-3);background:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.04));box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 0 0 1px rgba(255,255,255,.14)}
+.ico-box svg{width:44%;height:44%}
+/* ghidul */
+.up-wiz{gap:26px}
+.up-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.up-meta .eyebrow{margin-right:6px}
+.up-q{font-size:clamp(34px,3.6vw,48px);line-height:.98;outline:none}
+.up-lede{max-width:680px}
+.up-body{display:flex;flex-direction:column;gap:18px;min-width:0}
+.up-errbox{padding:14px 18px;border-radius:14px;background:rgba(255,217,160,.08);box-shadow:inset 0 0 0 1px rgba(255,217,160,.35)}
+.up-nav{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding-top:22px;border-top:1px solid var(--linie)}
+.up-go[disabled]{background:rgba(252,249,242,.28);color:rgba(16,32,74,.7);box-shadow:none;cursor:not-allowed}
+.up-tile{position:relative;min-height:170px;padding:18px}
+.up-tile svg{color:var(--albastru-3)}
+.up-tile[aria-pressed="true"] svg{color:var(--galben)}
+.up-tiles{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.up-tile b{font-size:clamp(24px,2.3vw,30px);font-weight:800;line-height:.95;color:#fff}
+.up-tile span{font-size:14px;line-height:1.4}
+.up-tile em{font-style:normal;margin-top:auto}
+.up-tile[disabled],.up-row[disabled],.mob-item[disabled]{opacity:.35;cursor:not-allowed}
+.up-row{min-height:56px}
+.up-row[aria-pressed="true"]{border-color:var(--galben)}
+.up-row[aria-pressed="true"] b{color:var(--galben)}
+.up-row-t{display:flex;flex-direction:column;gap:2px;text-align:left}
+.up-row-t small{font-size:13px;font-weight:500;color:var(--text-3)}
+.up-mobs .mob-item{grid-template-columns:auto 1fr auto;padding:20px 24px;color:#fff;font:inherit}
+.up-mobs .mob-item .n{font-size:52px}
+.up-mobs .mob-item b{font-size:32px}
+.up-flag{width:46px;height:31px;border-radius:5px;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+.up-label small{font-weight:500;color:var(--text-3)}
+.up-files li{gap:12px;padding:8px 8px 8px 10px}
+.th.th-s{--t:48px}
+.up-drop.is-locked{border-style:solid;border-color:rgba(255,255,255,.18)}
+/* locurile: cautare + carduri mari cu poza, pe orase, cu scroll pe orizontala */
+.up-search{position:relative}
+.up-search svg{position:absolute;left:16px;top:50%;margin-top:-9px;color:var(--text-3);pointer-events:none}
+.up-search .up-input{height:52px;padding-left:46px;border-radius:999px}
+.up-town{display:flex;flex-direction:column;gap:10px}
+.grp-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--linie)}
+.grp-t{font:800 26px/1 var(--disp);text-transform:uppercase;letter-spacing:.04em;color:#fff}
+.grp-t::before{content:'';display:inline-block;width:7px;height:7px;margin:0 12px 5px 2px;border-radius:50%;border:1.5px solid var(--galben)}
+.h-scroll{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 4px 14px;margin:0 -4px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.3) transparent}
+.pcard{position:relative;flex:0 0 clamp(240px,26vw,300px);height:220px;padding:0;border:0;border-radius:22px;overflow:hidden;cursor:pointer;scroll-snap-align:start;text-align:left;color:#fff;font:inherit;background:#0C1840;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 18px 40px -22px rgba(0,0,0,.8);transition:scale .3s var(--spring),box-shadow .25s ease}
+.pcard:active{scale:.98}
+.pcard[aria-pressed="true"]{box-shadow:inset 0 0 0 1.5px var(--galben),0 18px 40px -22px rgba(0,0,0,.8)}
+.pc-bg{position:absolute;inset:0;z-index:0;border-radius:0;transition:transform .7s var(--page-ease)}
+.pc-bg.ph{padding:0;font-size:0}
+.pc-bg.ph .ico{margin-top:-46px}
+@media (hover:hover){.pcard:hover .pc-bg{transform:scale(1.05)}}
+.pc-other{display:grid;place-items:center;color:var(--albastru-3);background:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.03));border:1.5px dashed rgba(255,255,255,.3);border-radius:22px}
+.pc-other svg{margin-top:-46px}
+.pc-shade{position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(7,14,38,0) 35%,rgba(7,14,38,.88) 100%);pointer-events:none}
+.pc-n{position:absolute;z-index:2;left:14px;top:14px;min-width:36px;height:36px;padding:0 8px;border-radius:999px;display:grid;place-items:center;font:800 17px/1 var(--disp);background:rgba(16,32,74,.9);box-shadow:0 0 0 1.5px rgba(255,255,255,.78)}
+.pc-txt{position:absolute;z-index:2;left:16px;right:16px;bottom:14px;display:flex;flex-direction:column;gap:4px}
+.pc-txt b{font:800 26px/1 var(--disp);text-transform:uppercase;letter-spacing:.01em}
+.pc-txt small{font-size:13px;color:var(--text-2)}
+/* Gallery / Journey: doua carduri mari */
+.dest-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.pcard.dcard{flex:none;width:100%;height:320px}
+.dcard .pc-txt{gap:8px;left:22px;right:22px;bottom:20px}
+.dcard .pc-txt b{font-size:clamp(48px,5vw,68px);line-height:.9;letter-spacing:.02em}
+.dcard .pc-txt small{font-size:14px;line-height:1.45;max-width:440px}
+.dcard .pc-shade{background:linear-gradient(180deg,rgba(7,14,38,.05) 15%,rgba(7,14,38,.92) 78%)}
+.gal-mini{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:70px;gap:6px;padding:10px}
+.gal-mini .ph{position:relative;padding:0;border-radius:10px;font-size:0}
+.gal-mini .ph .ico{width:22px;height:22px;margin:-11px 0 0 -11px}
+.gal-mini .g1{grid-column:span 2;grid-row:span 2}
+.gal-mini .g2{grid-row:span 2}
+.map-mini{background:radial-gradient(70% 60% at 50% 40%,rgba(61,107,255,.22),transparent 70%),#0A1436}
+.map-mini svg{width:100%;height:100%}
+/* preview */
+.pv-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.pv-bar b{color:#fff;font-weight:600}
+.pv-frame{display:flex;flex-direction:column;gap:20px;padding:clamp(18px,3vw,34px);border-radius:22px;background:rgba(7,14,38,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.pv-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.pv-head .h2{font-size:clamp(30px,3.6vw,46px)}
+.pv-rel{position:relative}
+.pv-gal{grid-auto-rows:auto}
+.pv-fig{position:relative;margin:0;display:flex;flex-direction:column;gap:8px}
+.pv-fig .media{aspect-ratio:1;border-radius:var(--r-mic)}
+.pv-fig .media img,.pv-fig .media video{width:100%;height:100%;object-fit:cover}
+.pv-fig .play-badge{right:auto;left:10px}
+.pv-fig figcaption{font-size:14px;line-height:1.35;color:var(--text-2)}
+.pv-fig figcaption.none{color:var(--text-3);font-style:italic}
+.pv-fig.sm .media{border-radius:12px}
+.pv-fig.sm button.up-pen.up-pen{right:6px;top:6px}
+.pv-stop{max-width:620px;cursor:default}
+.pv-entries .entry,.pv-entries .pv-ghost{cursor:default}
+.pv-ghost{opacity:.3}
+.pv-entries .entry .media{aspect-ratio:16/10;border-radius:18px}
+.pv-cover{aspect-ratio:16/7}
+.pv-days{grid-template-columns:repeat(auto-fit,minmax(240px,300px))}
+/* creionul din preview: sticla, mereu in dreapta sus */
+button.up-pen.up-pen{position:absolute;z-index:3;right:10px;top:10px;width:44px;height:44px;padding:0;border:0;border-radius:999px;display:grid;place-items:center;cursor:pointer;color:#fff;
+  background:linear-gradient(155deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,.08) 45%,rgba(255,255,255,.12) 100%);-webkit-backdrop-filter:blur(14px) saturate(160%);backdrop-filter:blur(14px) saturate(160%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 0 0 1px rgba(255,255,255,.22),0 8px 20px -8px rgba(0,0,0,.7);transition:background .2s ease,scale .3s var(--spring)}
+button.up-pen.up-pen:hover{background:linear-gradient(155deg,rgba(255,255,255,.32),rgba(255,255,255,.14))}
+button.up-pen.up-pen:active{scale:.92}
+.up-ed{max-width:640px;gap:16px;box-shadow:inset 0 0 0 1.5px rgba(255,204,0,.55),0 24px 60px -28px rgba(0,0,0,.75)}
+/* gata */
+.up-done{gap:22px;padding:clamp(28px,4vw,48px)}
+.up-done-t{display:block;margin-top:.55em;font-size:clamp(56px,9vw,120px);line-height:.92;transform:scaleY(1.3);transform-origin:0 100%;outline:none}
+.up-done .lead{margin:0}
+@media (max-width:760px){
+  .dest-grid{grid-template-columns:1fr}
+  .pcard.dcard{height:260px}
+  .btn.up-big{width:100%;justify-content:center;min-height:68px}
+  .up-me-a{width:100%}
+  .up-nav .btn-row{width:100%}
+  .up-nav .up-go{flex:1;justify-content:center}
+  .up-mobs .mob-item{padding:16px}
+  .up-mobs .mob-item .n{font-size:40px}
+  .up-mobs .mob-item b{font-size:26px}
+  .pv-entries{grid-template-columns:1fr}
+  .pv-ghost{display:none}
+}
+@media (max-width:520px){.up-tiles{grid-template-columns:1fr 1fr}.up-tile b{font-size:22px}.up-tile{min-height:0;padding:14px}.up-tile span{font-size:13px}}
+@media (max-width:560px){.up-li-row .up-acts{margin-left:72px}}
+
+/* selectorul nostru (in locul <select>): buton + lista de sticla */
+.up-dd{position:relative}
+.up-dd-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;cursor:pointer}
+.up-dd-btn:hover{border-color:rgba(255,255,255,.32)}
+.up-dd-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.up-dd-btn svg{flex:none;color:var(--text-2);transition:transform .25s var(--page-ease)}
+.up-dd.open .up-dd-btn{border-color:rgba(255,255,255,.45)}
+.up-dd.open .up-dd-btn svg{transform:rotate(180deg)}
+.up-dd-list{position:absolute;z-index:30;left:0;right:0;top:calc(100% + 6px);margin:0;padding:6px;list-style:none;max-height:280px;overflow-y:auto;border-radius:18px;outline:none;
+  background:linear-gradient(155deg,#25397A,#111F4E);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 0 0 1px rgba(255,255,255,.14),0 24px 50px -18px rgba(0,0,0,.85);animation:apare .22s var(--page-ease) both}
+.up-dd-list li{position:relative;display:flex;align-items:center;min-height:42px;padding:0 14px 0 34px;border-radius:12px;cursor:pointer;font:500 15px var(--font);color:var(--text-2)}
+.up-dd-list li.on{background:rgba(255,255,255,.1);color:#fff}
+.up-dd-list li[aria-selected="true"]{color:#fff;font-weight:600}
+.up-dd-list li[aria-selected="true"]::before{content:'';position:absolute;left:14px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:var(--galben)}
+.up-dd-list:focus-visible{box-shadow:inset 0 0 0 2px var(--galben),0 24px 50px -18px rgba(0,0,0,.85)}
+.glass:has(> .up-dd.open),.glass:has(.up-dd.open){z-index:40}   /* cardul cu lista deschisa sta deasupra celor de dupa el */
+.up-filters:has(.up-dd.open),.up-field:has(.up-dd.open){position:relative;z-index:40}
+/* conturul cardurilor cu poza sta deasupra pozei (altfel poza il acopera) */
+.pcard::after{content:'';position:absolute;inset:0;z-index:4;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);transition:box-shadow .2s ease}
+.pcard[aria-pressed="true"]::after{box-shadow:inset 0 0 0 2px var(--galben)}
+.pcard:focus-visible{outline:2px solid var(--galben);outline-offset:3px}
+.up-range{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:end;gap:14px;padding:18px;border-radius:20px;box-shadow:inset 0 0 0 1.5px rgba(255,204,0,.45),0 18px 40px -24px rgba(0,0,0,.7)}
+.up-range-to{display:grid;place-items:center;width:44px;height:48px;color:var(--galben)}
+.up-range-to svg{width:20px;height:20px}
+@media (max-width:560px){.up-range{grid-template-columns:1fr}.up-range-to{display:none}}
+/* miniaturile si pozele din preview se deschid pe tot ecranul */
+.th-btn{padding:0;border:0;background:none;cursor:zoom-in;border-radius:12px;color:inherit}
+.th-btn .media img,.pv-zoom img{transition:transform .5s var(--page-ease)}
+@media (hover:hover){.th-btn:hover .media img,.pv-zoom:hover img{transform:scale(1.08)}}
+button.media.pv-zoom{display:block;width:100%;padding:0;border:0;cursor:zoom-in;color:inherit}
+.pv-entries .entry button.media{aspect-ratio:16/10;border-radius:18px}
+
+/* =========================================================
+   UPLOAD, partea vizuala a ghidului (assets/js/upload.js: cards, dayCards, drop, wizardHTML)
+   In loc de liste lungi si bife: carduri cu iconita sau desen, cu bifa galbena pe cel ales.
+   Capul pasului: ce ai ales pana acum (click = inapoi la pasul acela), pasii ca segmente, iconita pasului.
+   ========================================================= */
+/* capul pasului */
+.up-meta{gap:8px 10px}
+.up-stepn{margin-left:auto;font:600 13px var(--font);letter-spacing:.04em;color:var(--text-3);font-variant-numeric:tabular-nums}
+.up-crumb{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 13px 0 10px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);color:#fff;font:600 13px var(--font)}
+button.up-crumb{cursor:pointer;transition:background .2s ease,border-color .2s ease,scale .3s var(--spring)}
+button.up-crumb:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.42)}
+button.up-crumb:active{scale:.96}
+.up-crumb svg{color:var(--galben)}
+.up-flag--s{display:block;width:21px;height:14px;border-radius:3px}
+.up-segs{display:flex;gap:6px}
+.up-segs i{flex:1;height:6px;border-radius:999px;background:rgba(255,255,255,.14);transition:background .3s ease}
+.up-segs i.done{background:rgba(255,204,0,.5)}
+.up-segs i.now{background:var(--galben);box-shadow:0 0 12px rgba(255,204,0,.5)}
+.up-qrow{display:flex;align-items:flex-start;gap:18px;margin-top:8px}
+.up-qic{flex:none;display:grid;place-items:center;width:64px;height:64px;border-radius:20px;color:var(--galben);background:linear-gradient(160deg,rgba(255,204,0,.22),rgba(255,204,0,.04));box-shadow:inset 0 0 0 1px rgba(255,204,0,.38),inset 0 1px 0 rgba(255,255,255,.2)}
+.up-qtxt{display:flex;flex-direction:column;gap:8px;min-width:0;padding-top:6px}
+.up-in > *{animation:apare .4s var(--page-ease) both}
+.up-in > :nth-child(2){animation-delay:50ms}
+.up-in > :nth-child(n+3){animation-delay:100ms}
+/* bifa galbena de pe cardul ales */
+.up-tick{position:absolute;z-index:3;right:12px;top:12px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;color:var(--cerneala);background:var(--galben);box-shadow:0 0 0 2px rgba(11,22,56,.8);scale:0;opacity:0;transition:scale .3s var(--spring),opacity .15s ease}
+[aria-pressed="true"] > .up-tick{scale:1;opacity:1}
+.up-tile .up-tick svg,.up-tile[aria-pressed="true"] .up-tick svg{color:var(--cerneala)}
+/* cardurile de ales */
+.up-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px}
+.up-opt{position:relative;display:flex;align-items:center;gap:14px;min-height:76px;padding:14px 46px 14px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:#fff;font:inherit;text-align:left;cursor:pointer;
+  transition:background .2s ease,border-color .2s ease,box-shadow .2s ease,scale .3s var(--spring),translate .3s var(--page-ease)}
+@media (hover:hover){.up-opt:not([disabled]):hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.36);translate:0 -2px}}
+.up-opt:active{scale:.98}
+.up-opt[aria-pressed="true"]{border-color:var(--galben);background:linear-gradient(160deg,rgba(255,204,0,.15),rgba(255,255,255,.05) 60%);box-shadow:0 0 0 1px var(--galben),0 14px 34px -18px rgba(255,204,0,.45)}
+.up-opt[disabled]{opacity:.35;cursor:not-allowed}
+.up-opt-ic{position:relative;flex:none;display:grid;place-items:center;width:52px;height:52px;border-radius:16px;color:#C9D6FF;background:linear-gradient(160deg,rgba(110,155,255,.3),rgba(61,107,255,.08));box-shadow:inset 0 0 0 1px rgba(150,180,255,.28),inset 0 1px 0 rgba(255,255,255,.22);transition:color .2s ease,background .2s ease}
+.up-opt[aria-pressed="true"] .up-opt-ic:not(.is-flag){color:var(--galben);background:linear-gradient(160deg,rgba(255,204,0,.26),rgba(255,204,0,.06));box-shadow:inset 0 0 0 1px rgba(255,204,0,.45)}
+.up-opt-ic em{position:absolute;right:-6px;bottom:-6px;min-width:22px;height:22px;padding:0 5px;border-radius:999px;display:grid;place-items:center;font:800 14px/1 var(--disp);font-style:normal;color:var(--cerneala);background:var(--crem);box-shadow:0 0 0 2px rgba(16,28,68,.9)}
+.up-opt-ic.is-flag{border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45),0 8px 18px -8px rgba(0,0,0,.7)}
+.up-opt[aria-pressed="true"] .up-opt-ic.is-flag{box-shadow:0 0 0 2px rgba(11,22,56,.9),0 0 0 4px var(--galben)}
+.up-opt-t{display:flex;flex-direction:column;gap:3px;min-width:0}
+.up-opt-t b{font:600 15.5px/1.3 var(--font);color:#fff;overflow-wrap:anywhere}
+.up-opt-t small{font-size:13px;line-height:1.4;color:var(--text-3)}
+.up-opt--new{border-style:dashed;border-color:rgba(255,255,255,.34);background:transparent}
+.up-opt--new .up-opt-ic{color:var(--galben);background:rgba(255,204,0,.1);box-shadow:inset 0 0 0 1px rgba(255,204,0,.35)}
+/* doua coloane late (categoriile A-D) */
+.up-opts--2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.up-opts--2 .up-opt{min-height:104px;padding:18px 48px 18px 18px;gap:18px}
+.up-opts--2 .up-opt-ic{width:60px;height:60px;border-radius:18px}
+.up-opts--2 .up-opt-t b{font:800 clamp(20px,1.9vw,25px)/1.02 var(--disp);text-transform:uppercase;letter-spacing:.01em}
+/* lista compacta (materialele care isi asteapta fisierul) */
+.up-opts--list{grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:10px}
+.up-opts--list .up-opt{min-height:64px;padding:10px 44px 10px 10px;border-radius:16px}
+.up-opts--list .up-opt-ic{width:44px;height:44px;border-radius:13px}
+.up-opts--list .up-opt-ic svg{width:22px;height:22px}
+/* iconita sus, text jos */
+.up-opts--v{grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr))}
+.up-opts--v .up-opt,.up-opt--v{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:18px;min-height:176px;padding:18px}
+.up-opts--v .up-opt-ic,.up-opt--v .up-opt-ic{width:60px;height:60px;border-radius:18px}
+.up-opts--v .up-opt-ic svg{width:30px;height:30px}
+.up-opts--v .up-opt-t b,.up-opt--v .up-opt-t b{font:800 clamp(21px,2vw,25px)/1 var(--disp);text-transform:uppercase;letter-spacing:.01em}
+.up-opts--two{grid-template-columns:repeat(2,minmax(0,1fr));max-width:720px}
+.up-opts--4{grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr))}
+.up-opt--v{align-items:center;justify-content:center;text-align:center;min-height:164px}
+.up-opt--v .up-opt-ic{width:68px;height:68px}
+.up-opt--v .up-opt-ic{border-radius:50%}
+.up-opt--v .up-opt-t{align-items:center}
+/* mobilitatile: steagul sus, orasul mare */
+.up-mobs{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.up-mob{flex-direction:column;align-items:stretch;gap:0;min-height:0;padding:0;overflow:hidden;border-radius:22px}
+.up-mob-flag{display:block;height:128px;opacity:.95;-webkit-mask:linear-gradient(180deg,#000 50%,transparent 100%);mask:linear-gradient(180deg,#000 50%,transparent 100%)}
+.up-mob-n{position:absolute;right:18px;bottom:14px;font:800 56px/.8 var(--disp);color:transparent;-webkit-text-stroke:1.3px rgba(252,249,242,.55)}
+.up-mob[aria-pressed="true"] .up-mob-n{-webkit-text-stroke-color:var(--galben)}
+.up-mob .up-opt-t{padding:2px 84px 20px 20px;gap:6px}
+.up-mob .up-opt-t b{font:800 clamp(30px,3.2vw,42px)/.95 var(--disp);text-transform:uppercase;letter-spacing:.01em}
+.up-mob .up-opt-t small{font-size:14px;color:var(--text-2)}
+/* zilele: foi de calendar */
+.up-days{grid-template-columns:repeat(auto-fill,minmax(min(100%,165px),1fr))}
+.up-day{flex-direction:column;align-items:flex-start;gap:2px;min-height:204px;padding:0 0 16px;overflow:hidden}
+.up-day-top{align-self:stretch;padding:9px 16px;font:700 12px var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--cerneala);background:var(--crem);transition:background .2s ease}
+.up-day[aria-pressed="true"] .up-day-top{background:var(--galben)}
+.up-day-n{padding:14px 16px 0;font:800 64px/.85 var(--disp);color:#fff}
+.up-day-m{padding:2px 16px 0;font:600 12px var(--font);letter-spacing:.12em;text-transform:uppercase;color:var(--text-3)}
+.up-day .up-opt-t{margin-top:auto;padding:12px 16px 0}
+.up-day .up-opt-t b{font-size:14px;line-height:1.3}
+.up-day-ico{padding:16px 16px 0;color:var(--galben)}
+.up-day.up-opt--new .up-day-top{background:transparent;color:var(--text-2);box-shadow:inset 0 -1px 0 rgba(255,255,255,.2)}
+.up-day .up-tick{top:46px}
+/* intrerupatorul (numele autorului) si cercul cu initiale */
+.up-switch{display:flex;align-items:center;gap:16px;width:100%;max-width:640px;padding:16px 18px;border-radius:22px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:#fff;font:inherit;text-align:left;cursor:pointer;transition:background .2s ease,border-color .2s ease,box-shadow .2s ease,scale .3s var(--spring)}
+.up-switch:hover{background:rgba(255,255,255,.09)}
+.up-switch:active{scale:.985}
+.up-switch[aria-checked="true"]{border-color:var(--galben);box-shadow:0 0 0 1px var(--galben)}
+.up-switch[aria-checked="false"] .up-ava{filter:grayscale(1);opacity:.55}
+.up-ava{flex:none;display:grid;place-items:center;width:52px;height:52px;border-radius:50%;font:800 22px/1 var(--disp);letter-spacing:.02em;color:var(--cerneala);background:linear-gradient(160deg,#FFE27A,var(--galben));box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 8px 18px -8px rgba(0,0,0,.6);transition:filter .2s ease,opacity .2s ease}
+.up-ava--l{width:72px;height:72px;font-size:30px}
+.up-sw{flex:none;margin-left:auto;width:54px;height:32px;padding:3px;border-radius:999px;background:rgba(255,255,255,.2);transition:background .25s ease}
+.up-sw i{display:block;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.4);transition:translate .3s var(--spring)}
+[aria-checked="true"] .up-sw{background:var(--galben)}
+[aria-checked="true"] .up-sw i{translate:22px 0}
+/* desenele (felul de upload, locul de fisiere) */
+.up-art{width:100%;height:100%;color:#9DB9FF;overflow:visible}
+.up-art .f{fill:rgba(110,155,255,.14)}
+.up-art .s{opacity:.45}
+.up-art .b{stroke-width:2.6}
+.up-art .y{stroke:var(--galben)}
+.up-art .yf{fill:var(--galben);stroke:var(--galben)}
+.up-art .d{stroke:var(--cerneala);fill:var(--cerneala)}
+.up-tile-art{display:block;align-self:stretch;height:104px;padding:12px;border-radius:14px;background:radial-gradient(80% 100% at 50% 0%,rgba(61,107,255,.3),transparent 75%),rgba(7,14,38,.4);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.up-tile .up-art,.up-tile[aria-pressed="true"] .up-art{color:#9DB9FF}
+.up-tile[aria-pressed="true"]{box-shadow:0 0 0 1px var(--galben),0 14px 34px -18px rgba(255,204,0,.45)}
+.up-tile .up-art{transition:translate .5s var(--page-ease),scale .5s var(--page-ease)}
+@media (hover:hover){.up-tile:not([disabled]):hover .up-art,.up-qcard:hover .up-art{translate:0 -3px;scale:1.04}}
+/* prima pagina: cine esti + de unde pornesti */
+.up-me{flex-wrap:nowrap}
+.up-me .up-me-t{flex:1 1 280px}
+.up-quick{display:flex;flex-direction:column;gap:14px}
+.up-quick-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(136px,1fr));gap:12px}
+.up-qcard{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;padding:10px 10px 16px;border-radius:20px;border:1px solid rgba(255,255,255,.16);background:rgba(16,28,68,.5);-webkit-backdrop-filter:blur(18px) saturate(160%);backdrop-filter:blur(18px) saturate(160%);color:#fff;font:inherit;text-align:left;cursor:pointer;
+  transition:background .2s ease,border-color .2s ease,scale .3s var(--spring),translate .3s var(--page-ease)}
+@media (hover:hover){.up-qcard:hover{border-color:var(--galben);background:rgba(24,40,92,.62);translate:0 -3px}}
+.up-qcard:active{scale:.97}
+.up-qcard .up-tile-art{height:88px}
+.up-qcard .up-art{transition:translate .5s var(--page-ease),scale .5s var(--page-ease)}
+.up-qcard b{padding:0 6px;font:800 21px/1 var(--disp);text-transform:uppercase;letter-spacing:.01em}
+.up-qcard em{position:absolute;right:16px;top:16px;height:22px;padding:0 9px;font-size:11px;font-style:normal;background:rgba(11,22,56,.8);color:#FFE27A}
+/* locul de fisiere */
+.up-drop{gap:14px;min-height:280px;padding:28px 22px;background:radial-gradient(60% 80% at 50% 0%,rgba(61,107,255,.22),transparent 70%),rgba(7,14,38,.38)}
+.up-drop-art{display:block;width:156px;height:104px;transition:translate .4s var(--page-ease),scale .4s var(--page-ease)}
+.up-drop.over .up-drop-art{translate:0 -8px;scale:1.06}
+.up-drop-in{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0}
+.up-drop-t{font:800 clamp(24px,2.5vw,32px)/1 var(--disp);text-transform:uppercase;letter-spacing:.01em}
+.up-kinds{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+.up-kind{--c:#FFCC00;display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:8px;font:700 11px var(--font);letter-spacing:.08em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.up-kind::before{content:'';width:7px;height:7px;border-radius:2px;background:var(--c)}
+.up-drop .up-pick{margin-top:2px;min-height:48px;padding:0 22px}
+.up-pick svg{width:18px;height:18px}
+.up-drop.has-files{flex-direction:row;flex-wrap:wrap;justify-content:flex-start;min-height:0;padding:14px 18px;gap:12px 18px;text-align:left}
+.up-drop.has-files .up-drop-art{width:72px;height:48px}
+.up-drop.has-files .up-drop-in{flex:1 1 220px;align-items:flex-start;gap:4px}
+.up-drop.has-files .up-kinds{display:none}
+.up-drop.has-files .up-drop-t{font-size:22px}
+/* pozele alese: grila de miniaturi */
+.up-fhead{display:flex;align-items:baseline;gap:10px}
+.up-fhead b{font:800 24px/1 var(--disp);text-transform:uppercase;color:#fff}
+.up-fgrid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.up-fgrid li{position:relative;display:flex;flex-direction:column;gap:8px;min-width:0}
+.up-ftile{position:relative;display:block;width:100%;aspect-ratio:1}
+.up-ftile .media{position:absolute;inset:0;border-radius:16px;box-shadow:0 0 0 1px rgba(255,255,255,.22),0 10px 24px -12px rgba(0,0,0,.7)}
+.up-ftile img,.up-ftile video{width:100%;height:100%;object-fit:cover}
+.up-fgrid .up-x{position:absolute;right:6px;top:6px;width:40px;height:40px;background:rgba(7,14,38,.74);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.up-fgrid .up-x:hover{background:rgba(224,79,68,.9)}
+.up-fgrid .up-fcover{position:absolute;left:8px;top:8px;height:24px;background:var(--galben);color:var(--cerneala);pointer-events:none}
+.up-fgrid .up-file-n{flex:none}
+.up-fgrid .up-sm{align-self:flex-start;min-height:34px;cursor:pointer}
+/* numaratorul de litere si cardul mic de sub link */
+.up-cnt{float:right;font:500 12px var(--font);color:var(--text-3);font-variant-numeric:tabular-nums}
+.up-linkpv{display:flex;align-items:center;gap:14px;max-width:560px;padding:12px 14px;border-radius:18px;border:1px dashed rgba(255,255,255,.26);background:rgba(7,14,38,.35)}
+.up-linkpv .up-opt-ic{width:44px;height:44px;border-radius:13px}
+.up-linkpv .tag{flex:none;margin-left:auto}
+/* se incarca / gata */
+.up-busy{flex-wrap:nowrap;gap:22px}
+.up-spin{position:relative;flex:none;display:grid;place-items:center;width:68px;height:68px;border-radius:50%;color:var(--galben);background:rgba(255,204,0,.1)}
+.up-spin::before{content:'';position:absolute;inset:0;border-radius:50%;border:3px solid rgba(255,255,255,.14);border-top-color:var(--galben);animation:up-rot 1s linear infinite}
+.up-spin svg{animation:up-bob 1s ease-in-out infinite alternate}
+.up-busy-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.up-pct{font:800 28px/1 var(--disp);color:#fff;font-variant-numeric:tabular-nums}
+.up-done-ic{display:grid;place-items:center;width:84px;height:84px;border-radius:50%;color:var(--cerneala);background:var(--galben);box-shadow:0 0 0 10px rgba(255,204,0,.14),0 18px 40px -14px rgba(255,204,0,.5);animation:up-pop .5s var(--spring) both}
+.up-done-ic svg{width:52px;height:52px}
+.up-done-ic circle{display:none}
+.up-done-ic path{stroke-dasharray:40;stroke-dashoffset:40;animation:up-draw .45s .25s ease-out forwards}
+@keyframes up-rot{to{rotate:360deg}}
+@keyframes up-bob{from{translate:0 3px}to{translate:0 -3px}}
+@keyframes up-pop{from{scale:.4;opacity:0}}
+@keyframes up-draw{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){
+  .up-in > *,.up-done-ic,.up-spin svg{animation:none}
+  .up-spin::before{animation-duration:2.4s}
+  .up-done-ic path{animation:none;stroke-dashoffset:0}
+  .up-opt,.up-qcard,.up-art,.up-drop-art{transition:none}
+}
+@media (max-width:860px){
+  .up-mobs{grid-template-columns:1fr}
+  .up-mob{flex-direction:row;align-items:center}
+  .up-mob-flag{flex:none;align-self:stretch;width:112px;height:auto;min-height:92px;-webkit-mask:linear-gradient(90deg,#000 50%,transparent 100%);mask:linear-gradient(90deg,#000 50%,transparent 100%)}
+  .up-mob .up-opt-t{padding:16px 84px 16px 8px}
+  .up-mob-n{bottom:50%;translate:0 50%;font-size:44px}
+  .up-mob .up-tick{right:8px;top:8px}
+}
+@media (max-width:760px){
+  .up-me{flex-wrap:wrap}
+  .up-quick-row{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 calc(var(--pad) * -1);padding:2px var(--pad) 10px;scrollbar-width:none}
+  .up-quick-row::-webkit-scrollbar{display:none}
+  .up-qcard{flex:0 0 150px;scroll-snap-align:start}
+  .up-opts--2{grid-template-columns:1fr}
+  .up-busy{flex-wrap:wrap}
+}
+@media (max-width:560px){
+  .up-qrow{gap:12px}
+  .up-qic{width:48px;height:48px;border-radius:15px}
+  .up-qic svg{width:24px;height:24px}
+  .up-qtxt{padding-top:2px}
+  .up-stepn{margin-left:0;flex-basis:100%;order:9}
+  .up-opts--v,.up-days{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .up-opts--v .up-opt{min-height:150px;padding:14px;gap:12px}
+  .up-opts--v .up-opt-ic{width:50px;height:50px;border-radius:15px}
+  .up-day{min-height:176px}
+  .up-day-n{font-size:52px}
+  .up-drop{min-height:230px;padding:22px 16px}
+  .up-fgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .up-ava--l{width:56px;height:56px;font-size:24px}
+  .up-mob-n{display:none}
+  .up-mob-flag{width:88px}
+  .up-mob .up-opt-t{padding:16px 44px 16px 6px}
+  .up-mob .up-opt-t b{font-size:26px;overflow-wrap:normal}
+  .up-drop.has-files .up-drop-art{display:none}
+  .up-drop.has-files .up-pick{width:100%;justify-content:center}
+}
+
+/* =========================================================
+   UPLOAD, editarea (upload.js: moreBtn, editHTML)
+   Edit apare langa butonul "...", care deschide meniul cu View on site si Delete.
+   Edit = un singur ecran: Cancel in stanga, Save in dreapta, campurile, iar alaturi cum arata pe site.
+   ========================================================= */
+/* meniul "..." (sta in <body>, pozitia o calculeaza upload.js) */
+.up-more[aria-expanded="true"]{background:rgba(255,255,255,.26)}
+.up-menu{position:fixed;z-index:150;min-width:210px;padding:6px;border-radius:18px;background:linear-gradient(155deg,#25397A,#111F4E);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 0 0 1px rgba(255,255,255,.14),0 24px 50px -18px rgba(0,0,0,.85);animation:apare .18s var(--page-ease) both}
+.up-mi{display:flex;align-items:center;gap:12px;width:100%;min-height:46px;padding:0 14px;border:0;border-radius:12px;background:none;color:#fff;font:600 15px var(--font);text-align:left;text-decoration:none;cursor:pointer}
+.up-mi:hover,.up-mi:focus-visible{background:rgba(255,255,255,.1);outline:none}
+.up-mi svg{flex:none;color:var(--text-2)}
+.up-mi.is-danger,.up-mi.is-danger svg{color:#FFB4A2}
+.up-mi.is-danger:hover,.up-mi.is-danger:focus-visible{background:rgba(255,95,86,.22)}
+.up-mi + .up-mi.is-danger{margin-top:6px}
+.up-mi + .up-mi.is-danger::before{content:'';position:absolute;left:14px;right:14px;margin-top:-52px;border-top:1px solid rgba(255,255,255,.14)}
+.up-menu{isolation:isolate}
+.up-mi{position:relative}
+/* ecranul de editare */
+.up-edit{gap:22px}
+.ed-bar{position:sticky;top:104px;z-index:6;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;margin:-10px -10px 0;padding:8px;border-radius:999px;background:rgba(13,24,60,.88);
+  -webkit-backdrop-filter:blur(16px) saturate(160%);backdrop-filter:blur(16px) saturate(160%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14),0 14px 30px -16px rgba(0,0,0,.7)}
+.ed-bar > :first-child{justify-self:start}
+.ed-bar > :last-child{justify-self:end}
+.ed-bar .btn{cursor:pointer}
+.ed-bar .up-go{min-height:46px;padding:0 28px}
+.ed-title{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center}
+.ed-title .up-q{font-size:clamp(21px,2.2vw,28px);line-height:1}
+.ed-title .small{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ed-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:28px;align-items:start}
+.ed-form{display:flex;flex-direction:column;gap:20px;min-width:0}
+.ed-side{position:sticky;top:184px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.ed-side-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;min-height:38px}
+.ed-side-h .seg button{height:32px;font-size:13px}
+.ed-pv{padding:18px;gap:16px}
+.ed-pv .pv-head .h2{margin-top:8px;font-size:clamp(24px,2.4vw,32px)}
+.ed-pv .pv-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+.ed-pv .pv-entries{grid-template-columns:1fr}
+.ed-pv .pv-ghost{display:none}
+.ed-pv .hub-grid,.ed-pv .mat-list,.ed-pv .pv-days{grid-template-columns:1fr}
+.ed-caps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ed-cap{display:flex;align-items:center;gap:12px}
+.ed-cap .up-input{flex:1;min-width:0}
+.ed-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.up-switch--s{max-width:none;padding:12px 14px;gap:12px;border-radius:16px}
+.ed-form .up-opts--4{grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));gap:10px}
+.ed-form .up-opt--v{min-height:128px;padding:14px;gap:12px}
+.ed-form .up-opt--v .up-opt-ic{width:52px;height:52px}
+.ed-form .up-opt--v .up-opt-t b{font-size:19px}
+.ed-fixed{padding:13px 16px;border-radius:14px;background:rgba(255,255,255,.06);color:#fff;font-weight:600}
+.ed-note{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:16px;background:rgba(255,255,255,.05);color:var(--text-2);font-size:15px}
+.ed-note svg{flex:none;color:var(--albastru-3)}
+.ed-foot{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin-top:6px;padding-top:20px;border-top:1px solid var(--linie)}
+.ed-del{color:#FFB4A2;cursor:pointer}
+.ed-del:hover{background:rgba(255,95,86,.22)}
+.ed-foot .up-help{flex:1 1 240px}
+/* descrierea scrisa direct sub poza, in preview-ul ghidului */
+.pv-cap{width:100%;height:40px;padding:0 12px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(7,14,38,.5);color:#fff;font:500 14px var(--font);transition:border-color .2s ease}
+.pv-cap::placeholder{color:#8F9BBB;font-style:italic}
+.pv-cap:hover{border-color:rgba(255,255,255,.34)}
+/* mesajul scurt de jos */
+.up-toast{position:fixed;z-index:160;left:50%;bottom:max(28px,calc(env(safe-area-inset-bottom,0px) + 18px));translate:-50% 0;display:flex;align-items:center;gap:10px;min-height:48px;padding:0 20px 0 12px;border-radius:999px;color:#fff;font:600 15px var(--font);
+  background:linear-gradient(155deg,#25397A,#111F4E);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 0 0 1px rgba(255,255,255,.16),0 20px 44px -16px rgba(0,0,0,.85);animation:up-toast 2.8s var(--page-ease) both}
+.up-toast-ic{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;color:var(--cerneala);background:var(--galben)}
+@keyframes up-toast{0%{opacity:0;translate:-50% 16px}8%,88%{opacity:1;translate:-50% 0}100%{opacity:0;translate:-50% 8px}}
+@media (max-width:900px){
+  .ed-grid{grid-template-columns:1fr}
+  .ed-side{position:static;order:-1}
+}
+@media (max-width:560px){
+  .ed-bar{top:88px;margin:-6px -8px 0;gap:6px}
+  .ed-bar .btn{min-height:42px;padding:0 14px}
+  .ed-bar .up-go{min-height:42px;padding:0 20px;width:auto}
+  .ed-title .small{display:none}
+  .ed-two{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){.up-menu{animation:none}.up-toast{animation-duration:2.8s;animation-timing-function:step-end}}

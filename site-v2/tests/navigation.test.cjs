@@ -140,6 +140,9 @@ test('Back and Forward restore route, scroll and controls without replacing vide
 
 test('Journey listeners are cleaned up and Journal routing works across repeated visits', async t => {
   const app = await setup(t);
+  // Journal e gol pana urca elevii primul articol: testul isi pune unul
+  if (!app.w.SITE.journal.length) app.w.SITE.journal.push({ id: 'test-entry', mob: 'ro', day: 'Monday', date: '16 Nov 2026', title: 'Test entry',
+    excerpt: 'A test story.', author: '', min: '1', body: ['First paragraph.', 'Second paragraph.'] });
   for (let i = 0; i < 3; i++) {
     await app.go('journal.html');
     const article = app.d.querySelector('.entry');
