@@ -310,8 +310,9 @@ async function imagesDelete(env, ref) {
 
 /* ---- Stream (upload prin protocolul tus, in aceleasi bucati de 20 MB) ---- */
 const TUS = { 'tus-resumable': '1.0.0' };
-// tokenul pleaca doar spre api.cloudflare.com
-const tusHeaders = (env, loc, extra = {}) => ({ ...TUS, ...extra, ...(new URL(loc).hostname === 'api.cloudflare.com' ? { authorization: 'Bearer ' + env.CF_MEDIA_TOKEN.trim() } : {}) });
+// tokenul pleaca doar spre api.cloudflare.com (sau un subdomeniu al lui)
+const cfApiHost = loc => { const h = new URL(loc).hostname; return h === 'api.cloudflare.com' || h.endsWith('.api.cloudflare.com'); };
+const tusHeaders = (env, loc, extra = {}) => ({ ...TUS, ...extra, ...(cfApiHost(loc) ? { authorization: 'Bearer ' + env.CF_MEDIA_TOKEN.trim() } : {}) });
 const b64 = text => { let bin = ''; for (const b of enc(text)) bin += String.fromCharCode(b); return btoa(bin); };
 async function streamUsage(env, fresh = false) {   // cate minute sunt ocupate in cont (raspunsul se tine minte 5 minute)
   const now = Date.now();
@@ -346,6 +347,16 @@ async function streamCreate(env, f, size) {
   if (at.protocol !== 'https:') throw new CfError('unexpected upload address');
   return { uid, loc: at.href };
 }
+// video-urile mici urca dintr-o singura cerere obisnuita (Stream primeste asa fisiere de pana la 200 MB)
+async function streamPost(env, f, buf) {
+  const fd = new FormData();
+  fd.append('file', new Blob([buf], { type: f.type }), f.name || f.key.split('/').pop());
+  const v = await cfJson(env, '/stream', { method: 'POST', body: fd });
+  if (!/^[a-z0-9]{16,64}$/i.test(v?.uid || '')) throw new CfError('unexpected upload answer');
+  const host = streamHost(v);
+  if (host) await metaSet(env, 'stream_host', host).catch(() => {});
+  return { uid: v.uid, url: host ? `${host}/${v.uid}` : null };
+}
 const tusOffset = async (env, loc) => {
   const h = await fetch(loc, { method: 'HEAD', headers: tusHeaders(env, loc) });
   const n = Number(h.headers.get('upload-offset'));
@@ -359,9 +370,10 @@ async function tusPatch(env, loc, offset, buf) {
       headers: tusHeaders(env, loc, { 'upload-offset': String(at), 'content-type': 'application/offset+octet-stream' }) });
     const got = Number(r.headers.get('upload-offset'));
     if (r.ok && got === end) return end;
+    let said = ''; try { said = (await r.text()).replace(/\s+/g, ' ').slice(0, 180); } catch (e) {}   // ce a raspuns Stream, ca eroarea sa poata fi inteleasa
     const real = await tusOffset(env, loc).catch(() => -1);
     if (real === end) return end;
-    if (!(real > at && real < end)) throw new CfError(`HTTP ${r.status} at byte ${at}`);
+    if (!(real > at && real < end)) throw new CfError(`HTTP ${r.status} at byte ${at} of ${buf.byteLength} (${new URL(loc).hostname}, offset ${real}) ${said}`.trim());
     at = real;
   }
   throw new CfError('part not accepted');
@@ -441,8 +453,9 @@ async function putFile(request, env, dev, url) {
   if (buf.byteLength > f.size) await quota(env, dev, buf.byteLength, false);
   const row = (store, ref, link, ready) => env.DB.prepare('INSERT INTO files (key, device_id, size, cls, name, created, store, ref, url, dur, ready) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(f.key, dev.id, buf.byteLength, f.cls, f.name, Date.now(), store, ref, link, store === 'stream' ? f.dur : 0, ready).run();
+  const r2only = url.searchParams.get('r2') === '1';   // pagina cere R2 cand o incercare in Stream nu a mers
   // pozele: Cloudflare Images
-  if (await imagesWanted(env, f, buf.byteLength)) {
+  if (!r2only && await imagesWanted(env, f, buf.byteLength)) {
     try {
       const im = await imagesPut(env, f, buf);
       await row('images', im.ref, im.url, 1);
@@ -450,12 +463,11 @@ async function putFile(request, env, dev, url) {
     } catch (e) { if (e instanceof Bad) throw e; await cfNote(env, 'images upload', e); }
   }
   // video-urile mici: Cloudflare Stream
-  if (await streamWanted(env, f).catch(() => false)) {
+  if (!r2only && await streamWanted(env, f).catch(() => false)) {
     let up = null;
     try {
-      up = await streamCreate(env, f, buf.byteLength);
-      await tusPatch(env, up.loc, 0, buf);
-      await row('stream', up.uid, null, 0);
+      up = await streamPost(env, f, buf);
+      await row('stream', up.uid, up.url, 0);
       return json({ key: f.key, size: buf.byteLength, store: 'stream' });
     } catch (e) { if (up) await streamDelete(env, up.uid); if (e instanceof Bad) throw e; await cfNote(env, 'stream upload', e); }
   }
@@ -467,7 +479,7 @@ async function putFile(request, env, dev, url) {
 }
 async function partsStart(env, dev, url) {
   const f = describe(url);
-  if (await streamWanted(env, f).catch(() => false)) {   // video-urile mari: Cloudflare Stream, in aceleasi bucati
+  if (url.searchParams.get('r2') !== '1' && await streamWanted(env, f).catch(() => false)) {   // video-urile mari: Cloudflare Stream, in aceleasi bucati
     await quota(env, dev, f.size, false);
     try {
       const up = await streamCreate(env, f, f.size);

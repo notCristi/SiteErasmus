@@ -128,22 +128,28 @@ async function api(method, path, { json, body } = {}) {
 // restul in R2 (stored tine minte unde a ajuns fiecare). Cele mari urca in bucati, cu trei incercari pentru fiecare bucata.
 // dur = durata unui video, in secunde (daca browserul a putut-o citi): serverul tine cu ea socoteala minutelor din Stream.
 const stored = new Map();
-async function send(blob, name, onBytes = () => {}, dur = 0) {
-  const q = `?name=${encodeURIComponent(name)}&size=${blob.size}${dur > 0 ? `&dur=${Math.round(dur * 10) / 10}` : ''}`;
+// Daca un video mare nu poate fi dus in Stream, urca din nou, de data asta in R2 (r2 = true), ca sa nu se piarda.
+async function send(blob, name, onBytes = () => {}, dur = 0, r2 = false) {
+  const q = `?name=${encodeURIComponent(name)}&size=${blob.size}${dur > 0 ? `&dur=${Math.round(dur * 10) / 10}` : ''}${r2 ? '&r2=1' : ''}`;
   if (blob.size <= 20 * MB) { const r = await api('POST', '/files' + q, { body: blob }); stored.set(r.key, r.store || 'r2'); onBytes(blob.size); return r.key; }
   const up = await api('POST', '/files/parts' + q), parts = [];
   stored.set(up.key, up.store || 'r2');
+  let done = 0;
   try {
     for (let n = 1, at = 0; at < blob.size; n++, at += up.partSize) {
       const chunk = blob.slice(at, at + up.partSize);
       for (let attempt = 1; ; attempt++) {
         try { parts.push(await api('PUT', `/files/parts?key=${encodeURIComponent(up.key)}&n=${n}`, { body: chunk })); break; }
-        catch (e) { if (attempt >= 3 || signal.aborted) throw e; await new Promise(res => setTimeout(res, 1500 * attempt)); }
+        catch (e) { if (attempt >= 3 || signal.aborted || e.message === 'upload_failed') throw e; await new Promise(res => setTimeout(res, 1500 * attempt)); }
       }
-      onBytes(chunk.size);
+      onBytes(chunk.size); done += chunk.size;
     }
     await api('POST', `/files/parts/done?key=${encodeURIComponent(up.key)}`, { json: { parts } });
-  } catch (e) { api('DELETE', `/files/parts?key=${encodeURIComponent(up.key)}`).catch(() => {}); throw e; }
+  } catch (e) {
+    api('DELETE', `/files/parts?key=${encodeURIComponent(up.key)}`).catch(() => {});
+    if (e.message === 'upload_failed' && !r2 && !signal.aborted) { onBytes(-done); return send(blob, name, onBytes, dur, true); }
+    throw e;
+  }
   return up.key;
 }
 

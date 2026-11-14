@@ -94,9 +94,15 @@ function fakeCloudflare() {
     }
     if (p.startsWith('/images/v1/') && method === 'DELETE') { const id = decodeURIComponent(p.slice(11)); return cf.images.delete(id) ? ok({}) : bad(404, 5404, 'not found'); }
     if (p === '/stream/storage-usage') return ok({ totalStorageMinutes: cf.usedMinutes, totalStorageMinutesLimit: cf.limitMinutes, videoCount: cf.videos.size });
+    if (p === '/stream' && method === 'POST' && !req.headers.get('tus-resumable')) {   // a plain upload, the whole file in one request
+      if (cf.failStream) return bad(500, 10005, 'stream is down');
+      const file = (await req.formData()).get('file'), uid = (++seq).toString(16).padStart(32, '0');
+      assert.ok(file && file.size > 0, 'video file field');
+      cf.videos.set(uid, { uid, loc: '', length: file.size, bytes: file.size, state: 'inprogress', duration: -1, name: file.name });
+      return ok({ uid, readyToStream: false, status: { state: 'queued' }, duration: -1, preview: `${STREAM_HOST}/${uid}/watch` });
+    }
     if (p === '/stream' && method === 'POST') {
       if (cf.failStream) return bad(500, 10005, 'stream is down');
-      assert.equal(req.headers.get('tus-resumable'), '1.0.0');
       const uid = (++seq).toString(16).padStart(32, '0'), length = Number(req.headers.get('upload-length'));
       const loc = cf.uploadHost === 'https://api.cloudflare.com' ? `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/stream/${uid}` : `${cf.uploadHost}/tus/${uid}`;
       cf.videos.set(uid, { uid, loc, length, bytes: 0, state: 'inprogress', duration: -1, meta: req.headers.get('upload-metadata') });
@@ -197,8 +203,10 @@ test('a small video goes to Cloudflare Stream and plays through its player', asy
   assert.equal(MEDIA._map.size, 0);
   const [video] = cf.videos.values();
   assert.equal(video.bytes, 4000);
-  assert.equal(video.meta, 'name ' + Buffer.from('trip.mp4').toString('base64'));
-  assert.deepEqual({ store: file(v.key).store, ref: file(v.key).ref, dur: file(v.key).dur, ready: file(v.key).ready }, { store: 'stream', ref: video.uid, dur: 42.5, ready: 0 });
+  assert.equal(video.name, 'trip.mp4');
+  assert.ok(cf.calls.includes('POST /stream') && !cf.calls.some(c => c.startsWith('PATCH')), 'one plain request, no tus');
+  assert.deepEqual({ store: file(v.key).store, ref: file(v.key).ref, dur: file(v.key).dur, ready: file(v.key).ready, url: file(v.key).url },
+    { store: 'stream', ref: video.uid, dur: 42.5, ready: 0, url: `${STREAM_HOST}/${video.uid}` });
 
   const poster = await put('trip-poster.webp', bytes(900));
   const item = await post('media', { key: v.key, thumb: poster.key, w: 1920, h: 1080 });
@@ -238,9 +246,11 @@ test('a large video reaches Stream in 20 MB parts, survives a lost answer, and m
   assert.equal(start.partSize, PART);
   const [video] = cf.videos.values();
   assert.equal(video.length, size);
+  assert.equal(video.meta, 'name ' + Buffer.from('long.mov').toString('base64'));
   const part = (n, data) => req(`/api/files/parts?key=${encodeURIComponent(start.key)}&n=${n}`, { method: 'PUT', token, body: data });
 
   assert.equal((await part(2, bytes(1234))).status, 502, 'part 2 before part 1 is refused by Stream');
+  assert.match((await (await req('/api/mine', { token })).json()).cloud.error.msg, /^HTTP 409 at byte 20971520 of 1234 \(api\.cloudflare\.com, offset 0\)/, 'the error says what happened');
   assert.equal((await part(1, bytes(1000))).status, 400, 'a short first part is refused');
   assert.equal((await req(`/api/files/parts/done?key=${encodeURIComponent(start.key)}`, { method: 'POST', token, json: { parts: [] } })).status, 400, 'not complete yet');
 
@@ -270,12 +280,19 @@ test('a large video reaches Stream in 20 MB parts, survives a lost answer, and m
 });
 
 test('the API token is never sent to an upload address outside api.cloudflare.com', async t => {
-  const { cf, put } = await setup(t);
+  const { cf, req, token } = await setup(t);
   cf.uploadHost = 'https://upload.cloudflarestream.com';
-  const v = await put('clip.mp4', bytes(3000));
-  assert.equal(v.store, 'stream');
+  const start = await (await req(`/api/files/parts?name=clip.mp4&size=3000`, { method: 'POST', token })).json();
+  assert.equal(start.store, 'stream');
+  assert.equal((await req(`/api/files/parts?key=${encodeURIComponent(start.key)}&n=1`, { method: 'PUT', token, body: bytes(3000) })).status, 200);
   assert.ok(cf.calls.includes('PATCH https://upload.cloudflarestream.com/tus/' + [...cf.videos.keys()][0]));
   assert.deepEqual(cf.strangers, []);
+
+  // the page can ask for R2 when a try in Stream did not work: nothing is sent to Cloudflare then
+  const before = cf.calls.length;
+  assert.equal((await (await req(`/api/files/parts?name=again.mp4&size=3000&r2=1`, { method: 'POST', token })).json()).store, 'r2');
+  assert.equal((await (await req(`/api/files?name=again2.mp4&size=4&r2=1`, { method: 'POST', token, body: bytes(4) })).json()).store, 'r2');
+  assert.equal(cf.calls.length, before);
 });
 
 test('when Images or Stream fail, or Stream is full, the upload still works and lands in R2', async t => {
