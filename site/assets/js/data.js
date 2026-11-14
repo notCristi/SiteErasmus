@@ -9,7 +9,7 @@ window.SITE = {
     name: 'United in Diversity, Stronger Through Participation',
     programme: 'Erasmus+',
     code: '2026-1-RO01-KA121-SCH-000448210',
-    email: 'liceulhonterus@yahoo.com',
+    email: 'todirenchicristi@gmail.com',
     // autoritatea care da banii (agentia nationala). In disclaimerul UE apare numele ei.
     grantAuthority: 'ANPCDEFP',
   },
@@ -19,6 +19,7 @@ window.SITE = {
     {
       id: 'ro', n: '01', name: 'Colegiul Național „Johannes Honterus”', city: 'Brașov', country: 'Romania',
       url: 'https://liceulhonterusbrasov.ro/lic/',
+      photo: 'assets/img/honterus.webp',   // poza scolii (pagina Partners)
       address: 'Curtea Honterus 3, 500025 Brașov, Romania',
       text: 'One of the oldest schools in Romania. Johannes Honterus started it in 1541, in the old town of Brașov.',
       teacher: '[Name]', students: '[NR]', date: '16–20 Nov 2026',
@@ -26,6 +27,7 @@ window.SITE = {
     {
       id: 'fr', n: '02', name: 'Cours Secondaire d\'Orsay', city: 'Orsay', country: 'France',
       url: 'https://cours-secondaire-orsay.fr/',
+      photo: 'assets/img/orsay-school.webp',
       address: '11 rue de Courtaboeuf, 91400 Orsay, France',
       text: 'A school in Orsay, a small town south of Paris. It has a primary school, a middle school and a high school in one place.',
       teacher: '[Name]', students: '[NR]', date: '[DATE]',
@@ -33,6 +35,7 @@ window.SITE = {
     {
       id: 'dk', n: '03', name: 'Fjerritslev Gymnasium', city: 'Fjerritslev', country: 'Denmark',
       url: 'https://www.fjerritslev-gym.dk/english/',
+      photo: 'assets/img/fjerritslev-school.webp',
       address: 'Skovbrynet 9, 9690 Fjerritslev, Denmark',
       text: 'An upper secondary school with around 300 students. It is in the north of Denmark, between the North Sea and the Limfjord.',
       teacher: '[Name]', students: '[NR]', date: '[DATE]',
@@ -154,7 +157,7 @@ window.SITE = {
         goals: ['[Goal 1]', '[Goal 2]', '[Goal 3]'],
         groups: '[How many students and teachers came from each school.]',
         programme: '',   // programul mobilitatii (PDF), de ex. 'media/docs/programme-fr.pdf'
-        photo: '',       // o poza reprezentativa, de ex. 'media/poze/fr-group.jpg'
+        photo: 'assets/img/orsay.webp',   // poza reprezentativa a mobilitatii
       },
       days: [
         { day: 'Day 1', date: '[DATE]', title: '[Title of the day]', text: '[A short description of the day.]', journal: 'fr-entry-1' },
@@ -196,7 +199,7 @@ window.SITE = {
         goals: ['[Goal 1]', '[Goal 2]', '[Goal 3]'],
         groups: '[How many students and teachers came from each school.]',
         programme: '',   // programul mobilitatii (PDF), de ex. 'media/docs/programme-dk.pdf'
-        photo: '',       // o poza reprezentativa, de ex. 'media/poze/dk-group.jpg'
+        photo: 'assets/img/fjerritslev.webp',   // poza reprezentativa a mobilitatii
       },
       days: [
         { day: 'Day 1', date: '[DATE]', title: '[Title of the day]', text: '[A short description of the day.]', journal: 'dk-entry-1' },

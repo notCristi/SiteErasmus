@@ -66,7 +66,9 @@ if (page === 'about') {
 if (page === 'partners') {
   $('schools').innerHTML = S.schools.map(s => `
     <article class="glass school" id="${s.id}" data-reveal>
-      <div class="school-media ph" style="--px:${20 + U.hash(s.id) % 60}%">${I.photo}<span>Coming soon</span><span class="big-n" aria-hidden="true">${s.n}</span></div>
+      ${s.photo
+        ? `<div class="school-media media"><img src="${esc(s.photo)}" alt="${esc(s.name)}" loading="lazy" decoding="async" style="position:absolute;inset:0"><span class="big-n" aria-hidden="true">${s.n}</span></div>`
+        : `<div class="school-media ph" style="--px:${20 + U.hash(s.id) % 60}%">${I.photo}<span>Coming soon</span><span class="big-n" aria-hidden="true">${s.n}</span></div>`}
       <div class="school-txt">
         <div class="row"><span class="tag">${esc(s.country)}</span><span class="tag y">Mobility ${s.n} · ${tx(s.date)}</span></div>
         <h2 class="h2">${esc(s.name)}</h2>
