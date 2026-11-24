@@ -309,6 +309,21 @@
 .up-head{display:flex;flex-direction:column;gap:12px}
 .up-h{font-size:clamp(26px,2.6vw,32px)}
 .up-gate{max-width:520px;gap:20px}
+/* logarea cu QR: pe calculator, codul sta in dreapta parolei (upload.js, qrSignIn). Pe telefon cardul ramane ascuns. */
+.up-gate-wrap{display:flex;flex-wrap:wrap;gap:22px;align-items:stretch}
+.up-gate-wrap .up-gate{flex:1 1 420px}
+.up-qr{flex:0 1 340px;gap:18px}
+.up-qr[hidden]{display:none}
+.up-qr-box{position:relative;width:min(100%,232px);aspect-ratio:1;border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 18px 40px -22px rgba(0,0,0,.8)}
+.up-qr-code,.up-qr-code svg{display:block;width:100%;height:100%}
+.up-qr-code{transition:opacity .25s ease,filter .25s ease}
+.up-qr-code.dim{opacity:.12;filter:blur(3px)}
+.up-qr-over{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:18px;text-align:center;color:#10204A;font:600 14px/1.4 var(--font)}
+.up-qr-over[hidden]{display:none}
+.up-qr-over .btn{cursor:pointer}
+.up-qr-steps{display:flex;flex-direction:column;gap:8px;margin:0;padding-left:20px;font-size:14px;line-height:1.5;color:var(--text-2)}
+.up-qr-steps b{color:#fff}
+.up-qr-time{font-variant-numeric:tabular-nums}
 .up-field{display:flex;flex-direction:column;gap:10px;min-width:0}
 .up-label{font:600 14px var(--font);color:var(--text)}
 .up-help{font-size:13px;line-height:1.5;color:var(--text-3)}

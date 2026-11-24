@@ -14,6 +14,17 @@ if (!root) return;
 const DEMO = /(^|[?&#])demo\b/.test(location.search + location.hash);
 const STORE = DEMO ? 'erasmus-upload-demo' : 'erasmus-upload', MB = 1024 * 1024;
 const HEIC_SRC = new URL('../vendor/heic-to/heic-to.js', window.UPLOAD_JS_SRC).href;
+const QR_SRC = new URL('../vendor/qrcode/qrcode.js', window.UPLOAD_JS_SRC).href;
+// logarea cu QR (vezi si _worker.js, "logarea cu QR"): pe calculator, langa parola, apare un cod; telefonul logat il scaneaza.
+// Codul apare doar pe un calculator (mouse si ecran lat). Pe telefon, adresa din cod (upload.html#pair=...) intreaba "Loghezi calculatorul?".
+const QR_SCREEN = '(hover: hover) and (pointer: fine) and (min-width: 860px)';
+const QR_POLL = 2000;   // la cate milisecunde intreaba calculatorul daca telefonul a spus Da
+const pairFromHash = () => {
+  const id = (/(?:^#|&)pair=([a-f0-9]{32})(?:&|$)/.exec(location.hash) || [])[1] || null;
+  if (id) try { history.replaceState(history.state, '', location.href.replace(/#.*$/, '')); } catch (e) {}   // codul nu ramane in adresa
+  return id;
+};
+let pendingPair = pairFromHash();
 const LIMIT = { image: 25 * MB, video: 300 * MB, doc: 100 * MB };
 const PHOTO = { max: 2560, q: 0.9, thumb: 640, thumbQ: 0.8 };   // pozele: latura lunga si calitatea, pentru poza mare si pentru cea mica
 const EXT = { image: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif', 'gif', 'bmp'], video: ['mp4', 'm4v', 'mov', 'webm'], doc: ['pdf', 'ppt', 'pptx', 'pps', 'ppsx', 'doc', 'docx', 'xls', 'xlsx', 'odt', 'ods', 'odp', 'rtf', 'txt', 'csv', 'zip', 'mp3', 'm4a', 'wav', 'ogg'] };
@@ -149,6 +160,8 @@ const MSG = {
   not_allowed: 'Your key does not allow this.', missing_field: 'Something is missing. Check the fields above.', bad_link: 'The link has to start with https://',
   key_taken: 'This key already exists. Choose another one.', key_too_short: 'A key needs at least 8 characters.', not_found: 'It is no longer there.',
   offline: 'No connection to the server. Check the internet and try again.',
+  pair_gone: 'This code is no longer valid. Show a new code on the computer and scan it again.',
+  pair_admin: 'The admin cannot sign in other devices with a QR code. Enter the admin key on the computer.',
 };
 const say = code => MSG[code] || 'Something went wrong. Try again.';
 const size = n => {
@@ -292,7 +305,7 @@ const demo = DEMO && (() => {
     { id: id(), type: 'info', mob: 'ro', t: now - 90 * H, part: 'programme', key: 'doc/demo-programme.pdf', own: false, uploader: 'Admin' },
   ];
   const trash = [];
-  let me = null;
+  let me = null, pair = null;
   const ok = data => Promise.resolve(JSON.parse(JSON.stringify(data)));
   const fail = code => Promise.reject(new Error(code));
   return async (method, path, { json, body } = {}) => {
@@ -303,8 +316,19 @@ const demo = DEMO && (() => {
       me = { id: 'demo-device', role: k.includes('admin') ? 'admin' : k.includes('prof') ? 'teacher' : 'student', name: json.name, label: k.includes('admin') ? 'Admin' : 'Demo key' };
       return ok({ token: 'demo-' + me.role, me });
     }
+    // logarea cu QR: in demo, click pe cod = telefonul spune Da (calculatorul intra ca elevul "Demo phone")
+    if (p === '/pair' && method === 'POST') { pair = { id: id().padEnd(32, '0'), status: 'wait' }; return ok({ id: pair.id, expiresIn: 3 * 60e3 }); }
+    const pm = /^\/pair\/([a-f0-9]{32})(\/approve|\/decline)?$/.exec(p);
+    if (pm && !pm[2]) return ok({ status: pair && pair.id === pm[1] ? pair.status : 'gone' });
+    if (pm) {
+      if (!pair || pair.id !== pm[1] || pair.status !== 'wait') return fail('pair_gone');
+      if (me?.role === 'admin') return fail('pair_admin');
+      pair.status = pm[2] === '/approve' ? 'ok' : 'no';
+      if (pair.status === 'ok' && !me) me = { id: 'demo-device', role: 'student', name: 'Demo phone', label: 'Demo key' };
+      return ok({ ok: true });
+    }
     if (!me && session) me = session.me;
-    if (p === '/me') return ok({ me });
+    if (p === '/me') return me ? ok({ me }) : fail('signed_out');
     if (p === '/logout') return ok({ ok: true });
     const staffNow = me && me.role !== 'student';
     if (p === '/mine') {
@@ -1424,11 +1448,11 @@ function buildKeysCard(errBox) {
 
 /* ---------- ferestre de dialog sigure (DOM nodes, fara innerHTML pe date user) ---------- */
 /* ---------- ferestre de dialog sigure (DOM nodes, fara innerHTML pe date user) ---------- */
-function dialog(title, bodyNode, okText, onOK, danger = false, { cancelText = 'Cancel', refresh = true } = {}) {
+function dialog(title, bodyNode, okText, onOK, danger = false, { cancelText = 'Cancel', refresh = true, onCancel = null } = {}) {
   const d = document.createElement('dialog');
   d.className = 'up-dialog glass';
   const err = el('p', { class: 'up-help up-derr', role: 'alert' });
-  const closeBtn = el('button', { type: 'button', class: 'btn glass', text: cancelText, on: { click: () => close() } });
+  const closeBtn = el('button', { type: 'button', class: 'btn glass', text: cancelText, on: { click: () => { onCancel?.(); close(); } } });
   const okBtn = el('button', { type: 'submit', class: `btn ${danger ? 'btn--solid up-btn-danger' : 'btn--solid'}`, text: okText });
   const form = el('form', { method: 'dialog' },
     el('h2', { class: 'h3', text: title }),
@@ -1439,7 +1463,7 @@ function dialog(title, bodyNode, okText, onOK, danger = false, { cancelText = 'C
   d.appendChild(form);
   document.body.appendChild(d);
   const close = () => { d.close(); d.remove(); };
-  d.addEventListener('cancel', e => { e.preventDefault(); close(); });
+  d.addEventListener('cancel', e => { e.preventDefault(); onCancel?.(); close(); });
   form.addEventListener('submit', async e => {
     e.preventDefault();
     okBtn.disabled = true;
@@ -1654,6 +1678,7 @@ function app() { ui.view = 'list'; render(false); mine(); }
 function gate(note = '') {
   ui.view = 'login';
   root.innerHTML = `
+  <div class="up-gate-wrap">
   <form class="glass card up-gate" novalidate>
     <div class="up-head"><span class="eyebrow">Project team only</span><h2 class="h3 up-h">Enter your access key</h2></div>
     <p class="muted">You got a key from your teacher. You enter it once, then this device stays signed in.</p>
@@ -1663,9 +1688,21 @@ function gate(note = '') {
       <p class="up-help">Only the website team sees who uploaded what.</p></div>
     <p class="up-help up-gerr" role="alert"></p>
     <button type="submit" class="btn btn--solid">Unlock ${I.arrow}</button>
-  </form>`;
+  </form>
+  <aside class="glass card up-qr" hidden aria-labelledby="up-qr-t">
+    <div class="up-head"><span class="eyebrow">Already signed in on your phone?</span><h2 class="h3 up-h" id="up-qr-t">Scan with your phone</h2></div>
+    <div class="up-qr-box" aria-live="polite"><div class="up-qr-code"></div><div class="up-qr-over" hidden></div></div>
+    <ol class="up-qr-steps">
+      <li>Open the camera on the phone where you already use Upload.</li>
+      <li>Point it at the code and open the link.</li>
+      <li>Tap <b>Yes</b> on the phone. This computer signs in by itself.</li>
+    </ol>
+    <p class="up-help up-qr-time"></p>
+  </aside>
+  </div>`;
   const form = root.querySelector('.up-gate'), err = form.querySelector('.up-gerr');
   err.textContent = note;
+  qrSignIn(root.querySelector('.up-qr'));
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const key = form.querySelector('#up-key').value.trim(), name = form.querySelector('#up-who').value.trim();
@@ -1676,8 +1713,134 @@ function gate(note = '') {
       session = { token: r.token, me: r.me };
       try { localStorage.setItem(STORE, JSON.stringify(session)); } catch (e2) {}
       app();
+      maybePair();
     } catch (e2) { err.textContent = say(e2.message); b.disabled = false; }
   });
+}
+
+/* ---------- logarea cu QR, partea calculatorului ----------
+   Calculatorul isi face singur codul de acces (token) si trimite la server doar amprenta lui. QR-ul duce la upload.html#pair=<id>.
+   Dupa ce telefonul spune Da, serverul tine minte amprenta ca dispozitiv nou, iar calculatorul intra cu codul pe care il are deja. */
+let qrLib = null;
+const loadQR = () => qrLib || (qrLib = new Promise((res, rej) => {
+  if (window.qrcode) return res(window.qrcode);
+  const sc = document.createElement('script');
+  sc.src = QR_SRC; sc.onload = () => (window.qrcode ? res(window.qrcode) : rej(new Error('qr')));
+  sc.onerror = () => { qrLib = null; rej(new Error('qr')); };
+  document.head.appendChild(sc);
+}));
+const randHex = n => [...crypto.getRandomValues(new Uint8Array(n))].map(b => b.toString(16).padStart(2, '0')).join('');
+const sha256Hex = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(b => b.toString(16).padStart(2, '0')).join('');
+// desenul codului: patratele negre pe alb, cu margine alba (fara ea, unele telefoane nu il citesc)
+function qrSVG(qr, text) {
+  const q = qr(0, 'M'); q.addData(text); q.make();
+  const n = q.getModuleCount(), m = 4;
+  let d = '';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c + m} ${r + m}h1v1h-1z`;
+  return `<svg viewBox="0 0 ${n + 2 * m} ${n + 2 * m}" shape-rendering="crispEdges" role="img" aria-label="QR code for signing in from your phone"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#0B1638"/></svg>`;
+}
+function qrSignIn(box) {
+  if (!box || !window.crypto?.subtle || !window.matchMedia) return;   // fara https (sau localhost) browserul nu face amprenta
+  const screen = matchMedia(QR_SCREEN), code = box.querySelector('.up-qr-code'), over = box.querySelector('.up-qr-over'), time = box.querySelector('.up-qr-time');
+  let run = null;   // incercarea de acum: { stop } ; se opreste cand pleci de pe ecranul de logare
+  const gone = () => !box.isConnected || ui.view !== 'login' || signal.aborted;
+  const stop = () => { if (run) { run.stop(); run = null; } };
+  const showOver = (text, button = 'Show a new code') => {
+    over.hidden = false; over.textContent = '';
+    over.append(el('p', { text }), el('button', { type: 'button', class: 'btn btn--solid', text: button, on: { click: () => start() } }));
+    code.classList.add('dim'); time.textContent = '';
+  };
+  async function start() {
+    stop();
+    if (gone()) return;
+    const me = run = { stopped: false, timer: 0, tick: 0, stop() { this.stopped = true; clearTimeout(this.timer); clearInterval(this.tick); } };
+    over.hidden = true; code.classList.add('dim'); code.onclick = null; time.textContent = 'Making a code…';
+    let id, expiresAt;
+    const token = randHex(32);   // 64 de caractere hex, ca orice cod de acces
+    try {
+      const qr = await loadQR();
+      const r = await pairApi('POST', '/pair', { hash: await sha256Hex(token) });
+      if (me.stopped) return;
+      id = r.id; expiresAt = Date.now() + r.expiresIn;
+      const link = new URL(location.href); link.hash = 'pair=' + id;
+      code.innerHTML = qrSVG(qr, link.href);
+      code.classList.remove('dim');
+      if (DEMO) { code.title = 'Demo: click the code to play the phone that says Yes'; code.onclick = () => demo('POST', `/pair/${id}/approve`); }
+    } catch (e) {
+      if (me.stopped) return;
+      if (e.message === 'not_configured') { stop(); box.hidden = true; return; }   // UPLOAD nu e pornit: nu are rost codul
+      showOver(say(e.message), 'Try again'); return;
+    }
+    const paint = () => { const s = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)); time.textContent = `The code works for ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} more.`; };
+    paint(); me.tick = setInterval(paint, 1000);
+    const end = (text, button) => { me.stop(); if (!gone()) showOver(text, button); };
+    const poll = async () => {
+      if (me.stopped) return;
+      if (gone()) return stop();
+      if (Date.now() > expiresAt) return end('The code expired.');
+      if (!document.hidden) {   // cat timp tab-ul nu se vede, nu intreaba degeaba
+        let st = 'wait';
+        try { st = (await pairApi('GET', '/pair/' + id)).status; } catch (e) { /* internetul a cazut o clipa: incearca din nou */ }
+        if (me.stopped) return;
+        if (gone()) return stop();
+        if (st === 'ok') return finish();
+        if (st === 'no') return end('The phone said no.');
+        if (st === 'limit') return end(say('device_limit'));
+        if (st === 'gone') return end('The code expired.');
+      }
+      me.timer = setTimeout(poll, QR_POLL);
+    };
+    me.timer = setTimeout(poll, QR_POLL);
+    async function finish() {
+      me.stop(); time.textContent = 'Signing in…';
+      let who;
+      try { who = (await pairApi('GET', '/me', null, token)).me; }
+      catch (e) { return end(say(e.message)); }
+      if (gone()) return;
+      session = { token, me: who };
+      try { localStorage.setItem(STORE, JSON.stringify(session)); } catch (e) {}
+      app(); toast('Signed in with your phone');
+    }
+  }
+  const sync = () => {
+    if (gone()) { screen.removeEventListener('change', sync); stop(); return; }
+    box.hidden = !screen.matches;
+    if (screen.matches && !run) start(); else if (!screen.matches) stop();
+  };
+  screen.addEventListener('change', sync);
+  signal.addEventListener('abort', () => { screen.removeEventListener('change', sync); stop(); }, { once: true });
+  sync();
+}
+// cererile pentru QR merg fara cod de acces (calculatorul inca nu e logat)
+// (token = codul nou al calculatorului, doar pentru /me, cand telefonul a spus deja Da)
+async function pairApi(method, path, json, token) {
+  if (DEMO) return demo(method, path, { json });
+  const headers = { ...(json ? { 'content-type': 'application/json' } : {}), ...(token ? { authorization: 'Bearer ' + token } : {}) };
+  let r;
+  try { r = await fetch('/api' + path, { method, signal, headers, body: json ? JSON.stringify(json) : undefined }); }
+  catch (e) { throw new Error('offline'); }
+  let data = null; try { data = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(data?.error || (r.status === 404 ? 'not_configured' : 'server_error'));
+  return data;
+}
+
+/* ---------- logarea cu QR, partea telefonului ----------
+   Telefonul a deschis upload.html#pair=<id>. Daca e logat, intreaba o data "Loghezi calculatorul?". Daca nu, intai parola. */
+function maybePair() {
+  const id = pendingPair;
+  if (!id || !session?.me) return;
+  pendingPair = null;
+  if (session.me.role === 'admin') {
+    dialog('Sign in the computer', el('p', { class: 'muted', text: say('pair_admin') }), 'OK', async () => {}, false, { cancelText: 'Close', refresh: false });
+    return;
+  }
+  const body = el('div', { class: 'up-dialog-body' },
+    el('p', { class: 'muted' }, 'The computer that shows this code will be signed in as ', el('b', { text: session.me.name }), session.me.label ? ` · ${session.me.label}` : '', '. It sees and edits the same uploads as this phone.'),
+    el('p', { class: 'up-help', text: 'Only say yes for a computer that is in front of you right now. Never for a code someone sent you.' }));
+  dialog('Sign in the computer?', body, 'Yes, sign it in', async () => {
+    await api('POST', `/pair/${id}/approve`);
+    toast('Computer signed in');
+  }, false, { cancelText: 'No', refresh: false, onCancel: () => api('POST', `/pair/${id}/decline`).catch(() => {}) });
 }
 
 /* ---------- ce se intampla la click, la scris si la fisiere ---------- */
@@ -1794,8 +1957,16 @@ document.addEventListener('click', e => {
 addEventListener('beforeunload', e => { if (ui.busy) { e.preventDefault(); e.returnValue = ''; } }, { signal });
 
 if (location.protocol === 'file:' && !DEMO) { root.innerHTML = '<p class="glass note">Upload works on the website itself, not when the page is opened from a folder on the computer. To see how it looks, open <a href="upload.html?demo">upload.html?demo</a>.</p>'; return; }
-if (!session) { gate(); return; }
+// pagina era deja deschisa pe telefon si s-a schimbat doar #pair=... din adresa
+addEventListener('hashchange', () => {
+  const id = pairFromHash();
+  if (!id) return;
+  pendingPair = id;
+  if (session?.me) maybePair(); else if (ui.view === 'login') gate('To sign in the computer, first sign in here on your phone. Then tap Yes.');
+}, { signal });
+if (!session) { gate(pendingPair ? 'To sign in the computer, first sign in here on your phone. Then tap Yes.' : ''); return; }
 app();
-// verifica la server ca accesul salvat mai e bun (parola poate fi anulata intre timp)
-api('GET', '/me').then(r => { session.me = r.me; try { localStorage.setItem(STORE, JSON.stringify(session)); } catch (e) {} if (ui.view === 'list') render(false); }).catch(() => {});
+// verifica la server ca accesul salvat mai e bun (parola poate fi anulata intre timp); abia apoi intreaba de calculator (QR)
+api('GET', '/me').then(r => { session.me = r.me; try { localStorage.setItem(STORE, JSON.stringify(session)); } catch (e) {} if (ui.view === 'list') render(false); maybePair(); })
+  .catch(e => { if (e.message === 'signed_out' && pendingPair) gate('This phone was signed out. Sign in again, then tap Yes to sign in the computer.'); else maybePair(); });
 };

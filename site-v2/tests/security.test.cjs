@@ -383,3 +383,109 @@ test('upload.js renders student titles, key labels and device names without XSS 
   ctrl.abort();
   w.close();
 });
+
+test('QR sign-in: phone approves, computer signs in with its own token and shares uploads; admin, limits and reuse are refused', async () => {
+  const worker = await loadWorker();
+  const { env, req, DB } = makeHarness(worker);
+  const sha = async t => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)))].map(b => b.toString(16).padStart(2, '0')).join('');
+  const hex = n => [...crypto.getRandomValues(new Uint8Array(n))].map(b => b.toString(16).padStart(2, '0')).join('');
+  const admTok = (await (await req('/api/login', { method: 'POST', json: { key: env.ADMIN_KEY, name: 'Admin' } })).json()).token;
+  await req('/api/admin/keys', { method: 'POST', token: admTok, json: { label: '10A', role: 'student', key: 'ELEV-QR-1234', max_devices: 2 } });
+  const phone = await (await req('/api/login', { method: 'POST', json: { key: 'ELEV-QR-1234', name: 'Ana Pop' } })).json();
+  const startPair = async (token = hex(32)) => {
+    const r = await req('/api/pair', { method: 'POST', json: { hash: await sha(token) } });
+    assert.equal(r.status, 200);
+    return { token, ...(await r.json()) };
+  };
+
+  // the phone uploads something before the computer exists
+  const link = await (await req('/api/items', { method: 'POST', token: phone.token, json: { type: 'link', mob: 'ro', data: { where: 0, title: 'From the phone', url: 'https://example.org/a' } } })).json();
+
+  // computer: waiting; the token itself never reaches the server
+  const pc = await startPair();
+  assert.match(pc.id, /^[a-f0-9]{32}$/);
+  assert.equal((await (await req('/api/pair/' + pc.id)).json()).status, 'wait');
+  assert.equal(DB._db.prepare('SELECT COUNT(*) AS n FROM pairs WHERE token_hash = ?').get(pc.token).n, 0);
+  assert.equal((await req('/api/me', { token: pc.token })).status, 401);
+
+  // approving needs a signed-in device, and comes from the site only
+  assert.equal((await req(`/api/pair/${pc.id}/approve`, { method: 'POST' })).status, 401);
+  const cross = await worker.fetch(new Request(`https://example.test/api/pair/${pc.id}/approve`, { method: 'POST', headers: { origin: 'https://evil.test', authorization: 'Bearer ' + phone.token } }), env, { waitUntil() {} });
+  assert.equal(cross.status, 403);
+
+  // admin cannot pair
+  const adm = await req(`/api/pair/${pc.id}/approve`, { method: 'POST', token: admTok });
+  assert.equal(adm.status, 403);
+  assert.equal((await adm.json()).error, 'pair_admin');
+
+  // phone says yes: computer is in, same key, role and name
+  assert.equal((await req(`/api/pair/${pc.id}/approve`, { method: 'POST', token: phone.token })).status, 200);
+  assert.equal((await (await req('/api/pair/' + pc.id)).json()).status, 'ok');
+  const meRes = await req('/api/me', { token: pc.token });
+  assert.equal(meRes.status, 200);
+  const pcMe = (await meRes.json()).me;
+  assert.equal(pcMe.name, 'Ana Pop');
+  assert.equal(pcMe.role, 'student');
+  assert.equal(pcMe.label, '10A');
+  assert.notEqual(pcMe.id, phone.me.id);
+
+  // the code works once
+  const again = await req(`/api/pair/${pc.id}/approve`, { method: 'POST', token: phone.token });
+  assert.equal(again.status, 410);
+
+  // computer and phone share their uploads (and can edit / delete them), other students do not
+  const mineOnPc = await (await req('/api/mine', { token: pc.token })).json();
+  assert.deepEqual(mineOnPc.items.map(i => [i.id, i.own]), [[link.id, true]]);
+  const fromPc = await (await req('/api/items', { method: 'POST', token: pc.token, json: { type: 'link', mob: 'fr', data: { where: 1, title: 'From the computer', url: 'https://example.org/b' } } })).json();
+  const mineOnPhone = await (await req('/api/mine', { token: phone.token })).json();
+  assert.deepEqual(mineOnPhone.items.map(i => i.id).sort(), [link.id, fromPc.id].sort());
+  assert.equal((await req('/api/items/' + fromPc.id, { method: 'PUT', token: phone.token, json: { mob: 'fr', data: { where: 1, title: 'Edited on phone', url: 'https://example.org/b' } } })).status, 200);
+  assert.equal((await req('/api/items/' + link.id, { method: 'DELETE', token: pc.token })).status, 200);
+  await req('/api/admin/keys', { method: 'POST', token: admTok, json: { label: '10B', role: 'student', key: 'ELEV-OTHER-77', max_devices: 0 } });
+  const other = await (await req('/api/login', { method: 'POST', json: { key: 'ELEV-OTHER-77', name: 'Dan' } })).json();
+  assert.equal((await req('/api/items/' + fromPc.id, { method: 'DELETE', token: other.token })).status, 403);
+  assert.equal((await (await req('/api/mine', { token: other.token })).json()).items.length, 0);
+
+  // phone logs out: the computer stays signed in and keeps the uploads
+  await req('/api/logout', { method: 'POST', token: phone.token });
+  assert.equal((await req('/api/me', { token: pc.token })).status, 200);
+  assert.equal((await (await req('/api/mine', { token: pc.token })).json()).items.length, 1);
+
+  // max_devices counts the computer: key has 2 (phone logged out, computer in), a 3rd device via QR is refused
+  const phone2 = await (await req('/api/login', { method: 'POST', json: { key: 'ELEV-QR-1234', name: 'Ana Pop' } })).json();
+  const pc2 = await startPair();
+  const lim = await req(`/api/pair/${pc2.id}/approve`, { method: 'POST', token: phone2.token });
+  assert.equal(lim.status, 403);
+  assert.equal((await lim.json()).error, 'device_limit');
+  assert.equal((await (await req('/api/pair/' + pc2.id)).json()).status, 'limit');
+  assert.equal((await req('/api/me', { token: pc2.token })).status, 401);
+
+  // "No" on the phone, expired and unknown codes
+  const pc3 = await startPair();
+  await req(`/api/pair/${pc3.id}/decline`, { method: 'POST', token: phone2.token });
+  assert.equal((await (await req('/api/pair/' + pc3.id)).json()).status, 'no');
+  const pc4 = await startPair();
+  DB._db.prepare('UPDATE pairs SET expires = ? WHERE id = ?').run(Date.now() - 1, pc4.id);
+  assert.equal((await (await req('/api/pair/' + pc4.id)).json()).status, 'gone');
+  assert.equal((await req(`/api/pair/${pc4.id}/approve`, { method: 'POST', token: phone2.token })).status, 410);
+  assert.equal((await (await req('/api/pair/' + 'a'.repeat(32))).json()).status, 'gone');
+
+  // a hash already used by a device, or a bad hash, is refused
+  assert.equal((await req('/api/pair', { method: 'POST', json: { hash: await sha(pc.token) } })).status, 400);
+  assert.equal((await req('/api/pair', { method: 'POST', json: { hash: 'nope' } })).status, 400);
+
+  // turning the key off signs the computer out too
+  const keyId = DB._db.prepare("SELECT id FROM keys WHERE label = '10A'").get().id;
+  await req('/api/admin/keys/' + keyId, { method: 'DELETE', token: admTok });
+  assert.equal((await req('/api/me', { token: pc.token })).status, 401);
+});
+
+test('QR sign-in: new codes are limited per IP', async () => {
+  const worker = await loadWorker();
+  const { req } = makeHarness(worker);
+  const hash = i => i.toString(16).padStart(64, '0');
+  for (let i = 0; i < 300; i++) assert.equal((await req('/api/pair', { method: 'POST', ip: '5.5.5.5', json: { hash: hash(i + 1) } })).status, 200);
+  const r = await req('/api/pair', { method: 'POST', ip: '5.5.5.5', json: { hash: hash(9999) } });
+  assert.equal(r.status, 429);
+  assert.equal((await req('/api/pair', { method: 'POST', ip: '6.6.6.6', json: { hash: hash(10000) } })).status, 200);
+});

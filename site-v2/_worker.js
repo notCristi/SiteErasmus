@@ -47,6 +47,8 @@ const MOBS = ['ro', 'fr', 'dk'];
 const STAFF_TYPES = ['info', 'day', 'stop'];        // doar profesorii si adminul: inlocuiesc un text care exista deja
 const TYPES = ['media', 'story', 'material', 'result', 'link', ...STAFF_TYPES];
 const TRIES = 1000, TRY_WINDOW = 15 * 60 * 1000;   // 1000 de incercari gresite pe IP (Wi-Fi scoala) = pauza 15 minute
+const PAIR_MS = 3 * 60 * 1000;                     // cat tine un cod QR de logare
+const PAIR_TRIES = 300;                            // cate coduri QR noi pe IP in 15 minute (Wi-Fi-ul scolii e o singura adresa)
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS keys (id TEXT PRIMARY KEY, label TEXT NOT NULL, role TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, locked INTEGER NOT NULL DEFAULT 0, max_devices INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL DEFAULT 0, quota_mb INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)`,
@@ -60,6 +62,10 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS attempts (ip TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS attempts_ip ON attempts (ip, ts)`,
   `CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)`,
+  // logarea cu QR: calculatorul arata un cod, telefonul deja logat il aproba. token_hash = amprenta codului de acces
+  // pe care si l-a facut calculatorul singur (codul in sine nu ajunge niciodata aici). status: wait / ok / no / limit
+  `CREATE TABLE IF NOT EXISTS pairs (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, ip TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'wait', by_device TEXT, created INTEGER NOT NULL, expires INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS pairs_ip ON pairs (ip, created)`,
 ];
 const MIGRATIONS = [
   `ALTER TABLE keys ADD COLUMN locked INTEGER NOT NULL DEFAULT 0`,
@@ -77,8 +83,11 @@ const MIGRATIONS = [
   `ALTER TABLE files ADD COLUMN sent INTEGER NOT NULL DEFAULT 0`,   // cati octeti au ajuns deja in Stream (upload pe bucati)
   `ALTER TABLE files ADD COLUMN ready INTEGER NOT NULL DEFAULT 1`,  // Stream: 0 = inca se prelucreaza, 1 = gata, -1 = nu a putut fi prelucrat
   `CREATE INDEX IF NOT EXISTS files_store ON files (store, ready)`,
+  // via = dispozitivul (telefonul) de pe care a fost logat acest dispozitiv prin QR. Amandoua au aceleasi upload-uri.
+  `ALTER TABLE devices ADD COLUMN via TEXT`,
+  `CREATE INDEX IF NOT EXISTS devices_via ON devices (via)`,
 ];
-const SCHEMA_V = '3';   // creste-l cu 1 de fiecare data cand schimbi SCHEMA sau MIGRATIONS (asa baza se actualizeaza o singura data)
+const SCHEMA_V = '4';   // creste-l cu 1 de fiecare data cand schimbi SCHEMA sau MIGRATIONS (asa baza se actualizeaza o singura data)
 let schemaReady = null, lastCleanup = 0;
 function ready(env) {
   if (!schemaReady) schemaReady = (async () => {
@@ -138,7 +147,7 @@ async function auth(request, env) {
   const m = /^Bearer ([a-f0-9]{64})$/.exec(request.headers.get('authorization') || '');
   if (!m) return null;
   const dev = await env.DB.prepare(
-    `SELECT d.id, d.key_id, d.role, d.name, d.adm, d.created, d.seen,
+    `SELECT d.id, d.key_id, d.role, d.name, d.adm, d.created, d.seen, d.via,
             k.active AS k_active, k.label AS k_label, k.expires_at AS k_expires
      FROM devices d LEFT JOIN keys k ON k.id = d.key_id WHERE d.token_hash = ?`).bind(await sha256(m[1])).first();
   if (!dev) return null;
@@ -153,6 +162,8 @@ async function auth(request, env) {
   if (now - dev.seen > 15 * 60 * 1000) await env.DB.prepare('UPDATE devices SET seen = ? WHERE id = ?').bind(now, dev.id).run();
   return dev;
 }
+// "al cui e" un upload: dispozitivul, sau telefonul de pe care a fost logat prin QR (asa calculatorul si telefonul au aceleasi upload-uri)
+const ownerOf = dev => dev.via || dev.id;
 const me = dev => ({ id: dev.id, role: dev.role, name: dev.name, label: dev.role === 'admin' ? 'Admin' : dev.k_label });
 
 async function login(request, env, ctx) {
@@ -201,6 +212,64 @@ async function login(request, env, ctx) {
   return json({ token, me: { id, role, name, label } });
 }
 
+/* ---------- logarea cu QR ----------
+   1. Calculatorul isi face singur un cod de acces si trimite aici doar amprenta lui (POST /api/pair). Primeste un id.
+   2. QR-ul de pe calculator duce la upload.html#pair=<id>. Telefonul, deja logat, intreaba "Loghezi calculatorul?"
+      si, la Da, trimite POST /api/pair/<id>/approve (cu codul lui de acces).
+   3. Serverul face un dispozitiv nou cu aceeasi parola, acelasi rol si acelasi nume ca telefonul, cu amprenta de la pasul 1.
+   4. Calculatorul intreaba din 2 in 2 secunde (GET /api/pair/<id>) si, cand vede "ok", intra cu codul pe care il are deja.
+   Codul de acces al calculatorului nu trece nici prin QR, nici prin server. Adminul nu poate loga alt dispozitiv asa. */
+const pairId = v => (typeof v === 'string' && /^[a-f0-9]{32}$/.test(v) ? v : '');
+async function pairStart(request, env, ctx) {
+  const ip = request.headers.get('cf-connecting-ip') || 'local', now = Date.now();
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM pairs WHERE ip = ? AND created > ?').bind(ip, now - TRY_WINDOW).first('n');
+  if (recent >= PAIR_TRIES) throw new Bad('too_many_tries', 429);
+  const b = await body(request, 1000);
+  const hash = typeof b.hash === 'string' && /^[a-f0-9]{64}$/.test(b.hash) ? b.hash : '';
+  if (!hash) throw new Bad('missing_field');
+  const taken = await env.DB.prepare('SELECT 1 AS x FROM devices WHERE token_hash = ?').bind(hash).first('x');
+  if (taken) throw new Bad('missing_field');
+  const id = rand(16), expires = now + PAIR_MS;
+  await env.DB.prepare('INSERT INTO pairs (id, token_hash, ip, created, expires) VALUES (?, ?, ?, ?, ?)').bind(id, hash, ip, now, expires).run();
+  maybeCleanup(env, ctx);
+  return json({ id, expiresIn: PAIR_MS });
+}
+async function pairStatus(env, id) {
+  const row = pairId(id) && await env.DB.prepare('SELECT status, expires FROM pairs WHERE id = ?').bind(id).first();
+  if (!row) return json({ status: 'gone' });
+  if (row.status === 'wait' && Date.now() > row.expires) return json({ status: 'gone' });
+  return json({ status: row.status });
+}
+async function pairApprove(env, dev, id) {
+  if (dev.role === 'admin') throw new Bad('pair_admin', 403);   // adminul isi scrie parola pe fiecare dispozitiv
+  const now = Date.now();
+  const row = pairId(id) && await env.DB.prepare('SELECT id, token_hash, status, expires FROM pairs WHERE id = ?').bind(id).first();
+  if (!row || row.status !== 'wait' || now > row.expires) throw new Bad('pair_gone', 410);
+  const k = await env.DB.prepare('SELECT active, locked, max_devices, expires_at FROM keys WHERE id = ?').bind(dev.key_id).first();
+  if (!k || !k.active) throw new Bad('signed_out', 401);
+  if (k.expires_at > 0 && now > k.expires_at) throw new Bad('key_expired', 403);
+  if (k.locked) throw new Bad('key_locked', 403);
+  // codul se foloseste o singura data: doar cine il trece din "wait" in "ok" face dispozitivul
+  const claim = await env.DB.prepare("UPDATE pairs SET status = 'ok', by_device = ? WHERE id = ? AND status = 'wait' AND expires >= ?").bind(dev.id, row.id, now).run();
+  if (!claim.meta.changes) throw new Bad('pair_gone', 410);
+  const newId = rand(8), via = ownerOf(dev);
+  const fail = status => env.DB.prepare('UPDATE pairs SET status = ? WHERE id = ?').bind(status, row.id).run();
+  let ins;
+  try {
+    ins = await env.DB.prepare(
+      `INSERT INTO devices (id, token_hash, key_id, role, name, adm, created, seen, via)
+       SELECT ?, ?, ?, ?, ?, NULL, ?, ?, ?
+       WHERE ? = 0 OR (SELECT COUNT(*) FROM devices WHERE key_id = ? AND token_hash NOT LIKE 'out:%') < ?`)
+      .bind(newId, row.token_hash, dev.key_id, dev.role, dev.name, now, now, via, k.max_devices, dev.key_id, k.max_devices).run();
+  } catch (e) { await fail('no').catch(() => {}); throw e; }   // calculatorul nu ramane sa astepte degeaba
+  if (!ins.meta.changes) { await fail('limit'); throw new Bad('device_limit', 403); }
+  return json({ ok: true });
+}
+async function pairDecline(env, dev, id) {
+  if (pairId(id)) await env.DB.prepare("UPDATE pairs SET status = 'no', by_device = ? WHERE id = ? AND status = 'wait'").bind(dev.id, id).run();
+  return json({ ok: true });
+}
+
 /* ---------- curatare automata fara Cron Trigger (ruleaza cel mult o data pe ora) ---------- */
 function maybeCleanup(env, ctx) {
   const now = Date.now();
@@ -245,7 +314,9 @@ async function cleanup(env) {
     if (backfill.length) await env.DB.batch(backfill);
     if (orphans.length) await dropFiles(env, orphans);
   }
-  // 4. video-urile din Stream care inca se prelucrau: afla daca sunt gata si cat dureaza
+  // 4. codurile QR de logare expirate
+  await env.DB.prepare('DELETE FROM pairs WHERE expires < ?').bind(now - 3600 * 1000).run();
+  // 5. video-urile din Stream care inca se prelucrau: afla daca sunt gata si cat dureaza
   await streamSync(env, 20).catch(() => {});
 }
 
@@ -706,9 +777,10 @@ async function createItem(request, env, ctx, dev) {
   return json({ id, type, mob, t: now, ...data });
 }
 async function ownItem(env, dev, id) {
-  const row = /^[a-f0-9]{16}$/.test(id) && await env.DB.prepare('SELECT * FROM items WHERE id = ? AND deleted = 0').bind(id).first();
+  const row = /^[a-f0-9]{16}$/.test(id) && await env.DB.prepare(
+    'SELECT i.*, COALESCE(d.via, d.id) AS owner FROM items i LEFT JOIN devices d ON d.id = i.device_id WHERE i.id = ? AND i.deleted = 0').bind(id).first();
   if (!row) throw new Bad('not_found', 404);
-  if (row.device_id !== dev.id && !staff(dev)) throw new Bad('not_allowed', 403);
+  if (row.owner !== ownerOf(dev) && !staff(dev)) throw new Bad('not_allowed', 403);
   return row;
 }
 async function editItem(request, env, ctx, dev, id) {
@@ -775,17 +847,18 @@ async function content(request, env, ctx, asScript) {
     ? new Response(`window.CLOUD=${items.replace(/</g, '\\u003c').replace(/[\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16))};`, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' } })
     : new Response(items, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 }
-// lista din UPLOAD: ale tale; profesorii si adminul le vad pe toate; doar adminul vede cine le-a urcat si Trash
+// lista din UPLOAD: ale tale (si ale telefonului / calculatorului logat prin QR); profesorii si adminul le vad pe toate; doar adminul vede cine le-a urcat si Trash
 async function mine(env, dev) {
   const q = staff(dev)
-    ? env.DB.prepare(`SELECT i.*, d.name AS by_name, d.key_id AS by_key_id, k.label AS by_label FROM items i LEFT JOIN devices d ON d.id = i.device_id LEFT JOIN keys k ON k.id = d.key_id WHERE i.deleted = 0 ORDER BY i.created DESC LIMIT 400`)
-    : env.DB.prepare('SELECT * FROM items WHERE deleted = 0 AND device_id = ? ORDER BY created DESC LIMIT 400').bind(dev.id);
+    ? env.DB.prepare(`SELECT i.*, COALESCE(d.via, d.id) AS owner, d.name AS by_name, d.key_id AS by_key_id, k.label AS by_label FROM items i LEFT JOIN devices d ON d.id = i.device_id LEFT JOIN keys k ON k.id = d.key_id WHERE i.deleted = 0 ORDER BY i.created DESC LIMIT 400`)
+    : env.DB.prepare('SELECT i.*, COALESCE(d.via, d.id) AS owner FROM items i JOIN devices d ON d.id = i.device_id WHERE i.deleted = 0 AND (d.id = ? OR d.via = ?) ORDER BY i.created DESC LIMIT 400').bind(ownerOf(dev), ownerOf(dev));
   const { results } = await q.all();
+  const owner = ownerOf(dev);
   const mapRow = r => ({
     ...pub(r),
-    own: r.device_id === dev.id,
+    own: r.owner === owner,
     ...(dev.role === 'admin' ? {
-      uploader: r.device_id === dev.id ? 'You' : `${r.by_name || '?'} · ${r.by_label || (r.by_key_id ? 'Deleted key' : 'Admin')}`,
+      uploader: r.owner === owner ? 'You' : `${r.by_name || '?'} · ${r.by_label || (r.by_key_id ? 'Deleted key' : 'Admin')}`,
       byKey: r.by_key_id || 'admin',
       byDevice: r.device_id,
     } : {}),
@@ -793,7 +866,7 @@ async function mine(env, dev) {
   const out = { items: results.map(mapRow) };
   if (dev.role === 'admin') {
     const [tr, used] = await Promise.all([
-      env.DB.prepare(`SELECT i.*, d.name AS by_name, d.key_id AS by_key_id, k.label AS by_label FROM items i LEFT JOIN devices d ON d.id = i.device_id LEFT JOIN keys k ON k.id = d.key_id WHERE i.deleted = 1 ORDER BY i.updated DESC LIMIT 200`).all(),
+      env.DB.prepare(`SELECT i.*, COALESCE(d.via, d.id) AS owner, d.name AS by_name, d.key_id AS by_key_id, k.label AS by_label FROM items i LEFT JOIN devices d ON d.id = i.device_id LEFT JOIN keys k ON k.id = d.key_id WHERE i.deleted = 1 ORDER BY i.updated DESC LIMIT 200`).all(),
       env.DB.prepare("SELECT COALESCE(SUM(size), 0) AS n FROM files WHERE store = 'r2'").first('n'),
     ]);
     out.trash = tr.results.map(r => ({ ...mapRow(r), deletedAt: r.updated }));
@@ -940,6 +1013,9 @@ async function api(request, env, ctx, url) {
   if (method !== 'GET' && origin && origin !== url.origin) throw new Bad('not_allowed', 403);
   await ready(env);
   if (path === '/api/login' && method === 'POST') return login(request, env, ctx);
+  if (path === '/api/pair' && method === 'POST') return pairStart(request, env, ctx);
+  const pair = /^\/api\/pair\/([a-f0-9]{32})(\/approve|\/decline)?$/.exec(path);
+  if (pair && !pair[2] && method === 'GET') return pairStatus(env, pair[1]);
   const dev = await auth(request, env);
   if (!dev) throw new Bad('signed_out', 401);
   maybeCleanup(env, ctx);
@@ -948,6 +1024,8 @@ async function api(request, env, ctx, url) {
     await env.DB.prepare('UPDATE devices SET token_hash = ? WHERE id = ?').bind('out:' + rand(16), dev.id).run();
     return json({ ok: true });
   }
+  if (pair && pair[2] === '/approve' && method === 'POST') return pairApprove(env, dev, pair[1]);
+  if (pair && pair[2] === '/decline' && method === 'POST') return pairDecline(env, dev, pair[1]);
   if (path === '/api/mine' && method === 'GET') return mine(env, dev);
   if (path === '/api/items' && method === 'POST') return createItem(request, env, ctx, dev);
   const item = /^\/api\/items\/([a-f0-9]{16})$/.exec(path);

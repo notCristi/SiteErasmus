@@ -116,6 +116,20 @@ Parolele:
 - Nu exista limita zilnica de upload si nici limita de upload-uri neterminate. Ramane doar plafonul total de spatiu.
 - Parolele nu sunt nicaieri in fisierele site-ului. In browser ramane doar un cod de acces al dispozitivului (`localStorage`, „erasmus-upload”), de aceea nu mai cere parola a doua oara.
 
+### Logarea cu QR (de pe telefon pe calculator)
+Pe calculator, pe ecranul cu parola, in dreapta apare un cod QR („Scan with your phone”). Pe telefon cardul asta nu apare.
+1. Pe telefonul pe care esti deja logat in UPLOAD deschizi camera si scanezi codul. Se deschide `upload.html#pair=...`.
+2. Telefonul intreaba „Sign in the computer?”, cu numele si parola cu care esti logat. Apesi **Yes, sign it in** (sau **No**).
+3. Calculatorul intra singur in cateva secunde, cu acelasi nume, aceeasi parola si acelasi rol ca telefonul.
+- Daca telefonul nu e logat, cere intai parola, apoi pune aceeasi intrebare.
+- Codul tine 3 minute si merge o singura data. Dupa aceea, pe calculator apare butonul „Show a new code”. Durata e `PAIR_MS` sus in `_worker.js`.
+- Adminul nu poate loga alt dispozitiv asa: isi scrie parola pe fiecare calculator.
+- Calculatorul conteaza ca un dispozitiv in plus la „Max devices”. Nu merge nici cu o parola „Lock new” sau expirata. „Turn off” la parola il scoate si pe el.
+- Telefonul si calculatorul logat de pe el au **aceleasi upload-uri**: le vad si le pot edita sau sterge pe amandoua. Daca iesi de pe telefon (Log out), calculatorul ramane logat. Daca adminul scoate unul dintre ele (Sign out la dispozitiv), celalalt ramane.
+- Siguranta: codul de acces al calculatorului nu trece nici prin QR, nici prin server; calculatorul il face singur si trimite doar amprenta lui. De aceea, si daca cineva fotografiaza QR-ul, nu primeste nimic. Singurul risc ramane sa apesi Yes pentru un cod pe care ti l-a trimis altcineva; de asta scrie pe telefon sa spui Da doar pentru calculatorul din fata ta.
+- In cod: `qrSignIn` (calculatorul) si `maybePair` (telefonul) in `upload.js`; `pairStart`, `pairStatus`, `pairApprove`, `pairDecline` in `_worker.js`; tabelul `pairs` si coloana `via` din `devices` (cu ea, calculatorul si telefonul au aceleasi upload-uri). Biblioteca care deseneaza codul e `assets/vendor/qrcode/` si se incarca doar pe calculator, pe ecranul cu parola. Stilul: clasele `.up-qr...` din `pages.css`.
+- In modul demo (`upload.html?demo`), click pe cod face ce ar face telefonul cand spune Yes.
+
 ### Pozele in Cloudflare Images, video-urile in Cloudflare Stream
 Cu pachetul „Images & Stream Starter Bundle” (5 $ pe luna), pozele noi se tin in Cloudflare Images, iar video-urile noi in Cloudflare Stream. Documentele (PDF, PowerPoint, Word...) raman in R2.
 
